@@ -1,0 +1,23 @@
+{
+	"extends": "./tsconfig.base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"paths": {
+			"*": ["./*"],
+			"@simpletoolsindiaorg/ai-provider": ["./packages/ai/src/index.ts"],
+			"@simpletoolsindiaorg/ai-provider/oauth": ["./packages/ai/src/oauth.ts"],
+			"@simpletoolsindiaorg/ai-provider/*": ["./packages/ai/src/*.ts", "./packages/ai/src/providers/*.ts"],
+			"@simpletoolsindiaorg/ai-provider/dist/*": ["./packages/ai/src/*"],
+			"@simpletoolsindiaorg/ai-agent": ["./packages/agent/src/index.ts"],
+			"@simpletoolsindiaorg/ai-agent/*": ["./packages/agent/src/*"],
+			"@simpletoolsindiaorg/ai-coding-agent": ["./packages/coding-agent/src/index.ts"],
+			"@simpletoolsindiaorg/ai-coding-agent/hooks": ["./packages/coding-agent/src/core/hooks/index.ts"],
+			"@simpletoolsindiaorg/ai-coding-agent/*": ["./packages/coding-agent/src/*"],
+			"typebox": ["./node_modules/typebox"],
+			"@simpletoolsindiaorg/ai-tui": ["./packages/tui/src/index.ts"],
+			"@simpletoolsindiaorg/ai-tui/*": ["./packages/tui/src/*"]
+		}
+	},
+	"include": ["packages/*/src/**/*", "packages/*/test/**/*", "packages/coding-agent/examples/**/*"],
+	"exclude": ["**/dist/**", "packages/coding-agent/examples/extensions/gondolin/**"]
+}

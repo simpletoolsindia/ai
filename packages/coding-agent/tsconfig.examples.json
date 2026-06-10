@@ -1,0 +1,16 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"paths": {
+			"@simpletoolsindiaorg/ai-coding-agent": ["./src/index.ts"],
+			"@simpletoolsindiaorg/ai-coding-agent/hooks": ["./src/core/hooks/index.ts"],
+			"@simpletoolsindiaorg/ai-tui": ["../tui/src/index.ts"],
+			"@simpletoolsindiaorg/ai-provider": ["../ai/src/index.ts"],
+			"typebox": ["../../node_modules/typebox"]
+		},
+		"skipLibCheck": true
+	},
+	"include": ["examples/**/*.ts"],
+	"exclude": ["node_modules", "dist"]
+}

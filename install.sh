@@ -3,6 +3,11 @@
 #
 # Supported: Linux, macOS, Windows (via Git Bash, WSL, or Cygwin)
 #
+# NOTE: The official prebuilt binaries are currently only published for
+# macOS and Linux. The build itself runs on any platform that has Node 22.19+
+# and the system deps. For Windows users, this script will build from source
+# (which requires Git Bash or WSL, not cmd.exe or PowerShell directly).
+#
 # What this does:
 #   1. Verifies Node.js >= 22.19 and npm
 #   2. Clones the ai repo (or uses a local source directory)

@@ -44,7 +44,22 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Build binaries
-        run: ./scripts/build-binaries.sh
+        # Build for macOS and Linux only (skip Windows for now).
+        # Invoke once per platform so the script writes to the right output dir.
+        # The script outputs files named `pi-*`; rename to `ai-*` for the fork.
+        run: |
+          for platform in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
+            echo "==> Building for $platform"
+            ./scripts/build-binaries.sh --platform "$platform"
+          done
+          echo "==> Renaming release artifacts from pi-* to ai-*"
+          cd packages/coding-agent/binaries
+          for f in pi-*; do
+            [ -e "$f" ] || continue
+            new_name="ai-${f#pi-}"
+            mv "$f" "$new_name"
+          done
+          ls -la
 
       - name: Extract changelog for this version
         id: changelog
@@ -66,25 +81,22 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd packages/coding-agent/binaries
-          
+
+          # Skip Windows: only build for macOS and Linux for now
           # Create release with changelog notes (or update if exists)
           gh release create "${RELEASE_TAG}" \
             --title "${RELEASE_TAG}" \
             --notes-file /tmp/release-notes.md \
-            pi-darwin-arm64.tar.gz \
-            pi-darwin-x64.tar.gz \
-            pi-linux-x64.tar.gz \
-            pi-linux-arm64.tar.gz \
-            pi-windows-x64.zip \
-            pi-windows-arm64.zip \
+            ai-darwin-arm64.tar.gz \
+            ai-darwin-x64.tar.gz \
+            ai-linux-x64.tar.gz \
+            ai-linux-arm64.tar.gz \
             2>/dev/null || \
           gh release upload "${RELEASE_TAG}" \
-            pi-darwin-arm64.tar.gz \
-            pi-darwin-x64.tar.gz \
-            pi-linux-x64.tar.gz \
-            pi-linux-arm64.tar.gz \
-            pi-windows-x64.zip \
-            pi-windows-arm64.zip \
+            ai-darwin-arm64.tar.gz \
+            ai-darwin-x64.tar.gz \
+            ai-linux-x64.tar.gz \
+            ai-linux-arm64.tar.gz \
             --clobber
 
   publish-npm:

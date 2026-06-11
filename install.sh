@@ -167,7 +167,7 @@ EOF
 
 while [ $# -gt 0 ]; do
 	case "$1" in
-		--source)    SOURCE_DIR="$2"; shift 2 ;;
+		--source)    SOURCE_DIR="$2"; SOURCE_DIR_OVERRIDE=1; shift 2 ;;
 		--prefix)    PREFIX="$2"; shift 2 ;;
 		--bin-dir)   BIN_DIR="$2"; shift 2 ;;
 		--ref)       REPO_REF="$2"; shift 2 ;;
@@ -246,16 +246,32 @@ if [ -n "$SOURCE_DIR" ]; then
 	fi
 	info "Using local source: $SOURCE_DIR"
 else
-	# Clone mode
-	# Use a temporary clone directory; we'll move it to the install prefix
-	CLONE_PARENT="$(mktemp -d -t ai-install-XXXXXX)"
-	SOURCE_DIR="$CLONE_PARENT/ai"
-	info "Cloning $REPO_URL (ref: $REPO_REF) to $SOURCE_DIR"
-	if [ "$DRY_RUN" -eq 1 ]; then
-		echo "  [dry-run] git clone --depth 1 --branch $REPO_REF $REPO_URL $SOURCE_DIR"
+	# Clone mode (or update if existing)
+	DEFAULT_SOURCE_DIR="$PREFIX/source"
+	if [ -d "$DEFAULT_SOURCE_DIR" ] && [ -d "$DEFAULT_SOURCE_DIR/.git" ]; then
+		# Existing installation: update in place
+		SOURCE_DIR="$DEFAULT_SOURCE_DIR"
+		info "Updating existing installation at $SOURCE_DIR"
+		if [ "$DRY_RUN" -eq 1 ]; then
+			echo "  [dry-run] git -C $SOURCE_DIR fetch origin $REPO_REF"
+			echo "  [dry-run] git -C $SOURCE_DIR reset --hard origin/$REPO_REF"
+		else
+			run git -C "$SOURCE_DIR" fetch --depth 1 origin "$REPO_REF" || \
+				die "Failed to fetch $REPO_URL. Check your network."
+			run git -C "$SOURCE_DIR" reset --hard "origin/$REPO_REF" || \
+				die "Failed to update $SOURCE_DIR to origin/$REPO_REF."
+		fi
 	else
-		run git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$SOURCE_DIR" || \
-			die "Failed to clone $REPO_URL. Check your network or use --source for local install."
+		# Fresh install
+		CLONE_PARENT="$(mktemp -d -t ai-install-XXXXXX)"
+		SOURCE_DIR="$CLONE_PARENT/ai"
+		info "Cloning $REPO_URL (ref: $REPO_REF) to $SOURCE_DIR"
+		if [ "$DRY_RUN" -eq 1 ]; then
+			echo "  [dry-run] git clone --depth 1 --branch $REPO_REF $REPO_URL $SOURCE_DIR"
+		else
+			run git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$SOURCE_DIR" || \
+				die "Failed to clone $REPO_URL. Check your network or use --source for local install."
+		fi
 	fi
 fi
 
@@ -322,6 +338,26 @@ fi
 # ---------------------------------------------------------------------------
 # Step 6: Link the `ai` binary
 # ---------------------------------------------------------------------------
+
+# On a fresh clone (not local source, not existing prefix/source),
+# move the cloned source into $PREFIX/source so subsequent installs
+# can detect and update it in place. Skip when SOURCE_DIR is the
+# current working directory (--source .), which is the dev workflow.
+if [ -z "${SOURCE_DIR_OVERRIDE:-}" ] && [ ! -d "$PREFIX/source" ]; then
+	FRESH_SOURCE_DIR="$PREFIX/source"
+	if [ -d "$SOURCE_DIR" ] && [ -d "$SOURCE_DIR/.git" ] && [ "$SOURCE_DIR" != "." ] && [ "$SOURCE_DIR" != "$(pwd)" ]; then
+		info "Persisting source to $FRESH_SOURCE_DIR for future updates"
+		if [ "$DRY_RUN" -eq 1 ]; then
+			echo "  [dry-run] mkdir -p $PREFIX && mv $SOURCE_DIR $FRESH_SOURCE_DIR"
+		else
+			mkdir -p "$PREFIX"
+			mv "$SOURCE_DIR" "$FRESH_SOURCE_DIR"
+			SOURCE_DIR="$FRESH_SOURCE_DIR"
+		fi
+	else
+		info "Source is local (not a clone); not persisting to $PREFIX/source"
+	fi
+fi
 
 # Resolve to absolute path so the symlink works regardless of cwd.
 # In dry-run + clone mode the dir doesn't exist yet, so fall back to the path as-is.
@@ -494,4 +530,7 @@ echo "  Update: $REPO_URL"
 echo "  Docs:   AGENTS.md, README.md, NOTICE.md"
 echo
 echo "  Quick test:  ai -p 'echo hi'"
+echo
+echo "  To update later, just re-run this script:"
+echo "    curl -fsSL https://raw.githubusercontent.com/simpletoolsindia/ai/main/install.sh | bash"
 echo

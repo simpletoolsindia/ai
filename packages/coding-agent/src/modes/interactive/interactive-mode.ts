@@ -122,6 +122,7 @@ import { SessionSelectorComponent } from "./components/session-selector.ts";
 import { SettingsSelectorComponent } from "./components/settings-selector.ts";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.ts";
 import { TodoListComponent } from "./components/todo-list.ts";
+import { WelcomePanel, type WelcomeInputs } from "./components/welcome.ts";
 import { ToolExecutionComponent } from "./components/tool-execution.ts";
 import { TreeSelectorComponent } from "./components/tree-selector.ts";
 import { TrustSelectorComponent } from "./components/trust-selector.ts";
@@ -652,71 +653,26 @@ export class InteractiveMode {
 
 		// Add header with keybindings from config (unless silenced)
 		if (this.options.verbose || !this.settingsManager.getQuietStartup()) {
-			const logo = theme.bold(theme.fg("accent", APP_NAME)) + theme.fg("dim", ` v${this.version}`);
-
-			// Custom ASCII art logo. Painted with the theme's accent color
-			// (no external font dependency) so the welcome screen looks
-			// polished on first launch.
-			const accent = (s: string) => theme.fg("accent", s);
-			const dim = (s: string) => theme.fg("dim", s);
-			const art = [
-				accent("   ╔══════╗ "),
-				accent("   ║      ║ "),
-				accent("╔══╝      ╚══╗"),
-				accent("║            ║   ") + dim("thinking partner"),
-				accent("║      ▄     ║   ") + dim("for developers"),
-				accent("║            ║   ") + dim(`v${this.version}`),
-				accent("╚══╗      ╔══╝"),
-				accent("   ║      ║ "),
-				accent("   ╚══════╝ "),
-			].join("\n");
-
-			// Build startup instructions using keybinding hint helpers
-			const hint = (keybinding: AppKeybinding, description: string) => keyHint(keybinding, description);
-
-			const expandedInstructions = [
-				hint("app.interrupt", "to interrupt"),
-				hint("app.clear", "to clear"),
-				rawKeyHint(`${keyText("app.clear")} twice`, "to exit"),
-				hint("app.exit", "to exit (empty)"),
-				hint("app.suspend", "to suspend"),
-				keyHint("tui.editor.deleteToLineEnd", "to delete to end"),
-				hint("app.thinking.cycle", "to cycle thinking level"),
-				rawKeyHint(`${keyText("app.model.cycleForward")}/${keyText("app.model.cycleBackward")}`, "to cycle models"),
-				hint("app.model.select", "to select model"),
-				hint("app.tools.expand", "to expand tools"),
-				hint("app.thinking.toggle", "to expand thinking"),
-				hint("app.editor.external", "for external editor"),
-				rawKeyHint("/", "for commands"),
-				rawKeyHint("!", "to run bash"),
-				rawKeyHint("!!", "to run bash (no context)"),
-				hint("app.message.followUp", "to queue follow-up"),
-				hint("app.message.dequeue", "to edit all queued messages"),
-				hint("app.clipboard.pasteImage", "to paste image"),
-				rawKeyHint("drop files", "to attach"),
-			].join("\n");
-			const compactInstructions = [
-				hint("app.interrupt", "interrupt"),
-				rawKeyHint(`${keyText("app.clear")}/${keyText("app.exit")}`, "clear/exit"),
-				rawKeyHint("/", "commands"),
-				rawKeyHint("!", "bash"),
-				hint("app.tools.expand", "more"),
-			].join(theme.fg("muted", " · "));
-			const compactOnboarding = theme.fg(
-				"dim",
-				`Press ${keyText("app.tools.expand")} for the full reference · /help for all commands · Tab to toggle PLAN/EXECUTE mode`,
-			);
-			const onboarding = theme.fg(
-				"dim",
-				`A coding agent that reads, runs, and writes for you. Ask it to fix a bug, refactor a module, write tests, or explore a codebase.`,
-			);
-			this.builtInHeader = new ExpandableText(
-				() => `${art}\n\n${logo}\n${compactInstructions}\n${compactOnboarding}\n\n${onboarding}`,
-				() => `${art}\n\n${logo}\n${expandedInstructions}\n\n${onboarding}`,
-				this.getStartupExpansionState(),
-				1,
-				0,
-			);
+			const modelLabel = (() => {
+				const m = this.session.model;
+				if (!m) return "no model selected";
+				const id = m.id ?? "";
+				const provider = m.provider ?? "";
+				return provider ? `${provider}/${id}` : id;
+			})();
+			const inputs: WelcomeInputs = {
+				appName: APP_NAME,
+				version: this.version,
+				cwd: this.sessionManager.getCwd(),
+				gitBranch: this.footerDataProvider.getGitBranch(),
+				sessionName: this.sessionManager.getSessionName(),
+				modelLabel,
+				mode: this.session.getMode(),
+				keyText,
+				rawKeyHint,
+				keyHint,
+			};
+			this.builtInHeader = new WelcomePanel(inputs);
 
 			// Setup UI layout
 			this.headerContainer.addChild(new Spacer(1));
@@ -2907,6 +2863,7 @@ export class InteractiveMode {
 
 			case "session_info_changed":
 				this.updateTerminalTitle();
+				this.refreshWelcomePanel();
 				this.footer.invalidate();
 				this.ui.requestRender();
 				break;
@@ -6315,6 +6272,57 @@ export class InteractiveMode {
 		);
 		// Re-render the footer so the new mode badge appears right away.
 		this.footer.invalidate();
+		this.refreshWelcomePanel();
+		this.ui.requestRender();
+	}
+
+	/**
+	 * Rebuild the welcome panel. Called when state the welcome depends
+	 * on changes (mode, model, branch, todo list). Only operates if the
+	 * panel is currently the built-in header (otherwise the user has a
+	 * custom header installed and we leave it alone).
+	 */
+	private refreshWelcomePanel(): void {
+		if (this.customHeader) return;
+		if (this.options.verbose || this.settingsManager.getQuietStartup()) return;
+		if (!(this.builtInHeader instanceof WelcomePanel)) return;
+
+		const modelLabel = (() => {
+			const m = this.session.model;
+			if (!m) return "no model selected";
+			const id = m.id ?? "";
+			const provider = m.provider ?? "";
+			return provider ? `${provider}/${id}` : id;
+		})();
+		const inputs: WelcomeInputs = {
+			appName: APP_NAME,
+			version: this.version,
+			cwd: this.sessionManager.getCwd(),
+			gitBranch: this.footerDataProvider.getGitBranch(),
+			sessionName: this.sessionManager.getSessionName(),
+			modelLabel,
+			mode: this.session.getMode(),
+			keyText,
+			rawKeyHint,
+			keyHint,
+		};
+		const fresh = new WelcomePanel(inputs);
+		this.headerContainer.removeChild(this.builtInHeader);
+		// The layout is [Spacer, header, Spacer]. Find the spacer and
+		// insert the new header after it; fall back to append.
+		let insertIndex = this.headerContainer.children.length;
+		for (let i = 0; i < this.headerContainer.children.length; i += 1) {
+			// @ts-ignore -- private children but we control the structure
+			if (this.headerContainer.children[i] instanceof Spacer) {
+				insertIndex = i + 1;
+				break;
+			}
+		}
+		// Container.addChild appends; we want to insert at a specific
+		// index. Splice manually.
+		// @ts-ignore
+		this.headerContainer.children.splice(insertIndex, 0, fresh);
+		this.builtInHeader = fresh;
 		this.ui.requestRender();
 	}
 
@@ -6358,8 +6366,7 @@ export class InteractiveMode {
 	 * usage hints. Pulled from `BUILTIN_SLASH_COMMANDS` and grouped by
 	 * category for easier scanning.
 	 */
-	private handleHelpCommand(): void {
-		const commands = BUILTIN_SLASH_COMMANDS;
+	private handleHelpCommand(): void {		const commands = BUILTIN_SLASH_COMMANDS;
 		// Group commands by category using a simple heuristic on the
 		// command name. Keeps the help output organized even when the
 		// underlying command list grows.

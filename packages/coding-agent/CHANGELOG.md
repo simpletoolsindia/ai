@@ -2,6 +2,28 @@
 
 > **Fork notice:** This is the changelog for **ai**, a fork of [pi](https://github.com/earendil-works/pi). Entries up to and including v0.78.1 are inherited verbatim from the upstream pi project. Starting with the first ai release, new entries are added by this fork. See [NOTICE.md](https://github.com/simpletoolsindiaorg/ai/blob/main/NOTICE.md) for the full fork attribution.
 
+## [0.79.8] - 2026-06-11
+
+Polished welcome screen and tighter production polish.
+
+### New Features
+
+- **Polished welcome panel** — the first-launch screen is now a structured, multi-line TUI panel inspired by Claude Code, Gemini CLI, and aider. Shows:
+  - A 6-line bold ASCII logo with a 4-line tagline ('a coding agent for the terminal / reads, runs, writes, remembers / self-extensible · 20+ providers / PLAN-first · Tab to execute')
+  - The current mode as a colored badge (● PLAN in warning, ● EXECUTE in success) with a one-line hint
+  - The model and working directory on a single row, with the git branch attached
+  - A live plan progress bar (▰▰▰▱▱ 2/5 done) when the todo list is populated
+  - A compact keybinding strip (interrupt · clear/exit · commands · bash · plan/exec)
+  - A "Try one of these" quick-start section with four example prompts
+  - A final tip reminding the user about PLAN-by-default
+- The panel auto-rebuilds when the mode, model, branch, or todo list changes.
+
+### Added
+
+- `WelcomePanel` component in `src/modes/interactive/components/welcome.ts` (~300 lines, fully self-contained)
+- `refreshWelcomePanel()` in interactive-mode — wired into the `session_info_changed` event
+- 8 new tests in `test/welcome-panel.test.ts` (component source, interactive-mode wiring, refresh path)
+
 ## [0.79.7] - 2026-06-11
 
 The PLAN/EXECUTE workflow is now strict and discoverable. The todo list is now sticky at the bottom of the screen and animates as work progresses.

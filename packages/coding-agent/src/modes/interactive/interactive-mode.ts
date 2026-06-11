@@ -4443,6 +4443,8 @@ export class InteractiveMode {
 
 		this.session.modelRegistry.refresh();
 		try {
+			// Auto-discover models from providers (Ollama, LM Studio)
+			await this.session.modelRegistry.refreshDiscoveredModels();
 			return await this.session.modelRegistry.getAvailable();
 		} catch {
 			return [];

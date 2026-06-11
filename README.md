@@ -24,6 +24,26 @@ curl -fsSL https://raw.githubusercontent.com/simpletoolsindia/ai/main/install.sh
 
 `ai` is a terminal-native coding agent that reads your project, edits files, runs shell commands, and queries the web — all in a single agent loop, with full session history you can replay, branch, fork, and resume. Pluggable models (Ollama, Anthropic, OpenAI, Bedrock, Groq, …). Persistent memory across sessions. Sandboxed tools. PLAN/EXECUTE modes for safe exploration. Web search and fetch built in. **No SaaS, no cloud relay, no data leaving your machine unless you ask.**
 
+```
+  █████   ██╗     ai v0.79.8
+ ██╔══██  ██║     a coding agent for the terminal
+ ███████  ██║     reads, runs, writes, remembers
+ ██╔══██  ██║     self-extensible · 20+ providers
+ ██║  ██  ██║     PLAN-first · Tab to execute
+ ╚═╝  ╚═  ╚═╝
+
+  ● PLAN   read-only · press Tab to execute
+  Plan     no active plan
+  ──────────────────────────────────────────
+  esc interrupt  ·  ctrl+c/ctrl+d clear/exit  ·  / commands  ·  ! bash  ·  Tab plan/exec
+
+  Try one of these
+  ! Read & refactor   "split auth.ts into a folder, one file per concern"
+  ! Debug a test      "why is test_x flaky? trace the imports"
+  ! Onboard a repo    "summarize this repo, find entry points, list TODOs"
+  ! Add a feature     "add a /stats slash command that shows token usage"
+```
+
 It is structured as four focused packages on npm, each independently usable:
 
 | Package | Purpose |
@@ -58,14 +78,18 @@ Requirements: **Node 22+**, **macOS or Linux** (Windows works under WSL2). Full 
 
 ```bash
 $ ai
-# PLAN mode by default — the model can only read, search, and propose a plan.
+# A polished welcome panel appears with the current mode, model, working
+# directory, and a live plan progress bar.
+# Default mode is PLAN — the model can only read, search, and propose a plan.
 # Press Tab to switch to EXECUTE.
 
 > add a /help slash command to the slash-command table
 [PLAN]  read packages/coding-agent/src/core/slash-commands.ts
-[PLAN]  draft a plan: add description, group by category, render on /help
+[PLAN]  draft a plan via the todo tool: 4 items
 
-Plan ready. Press Tab to apply (y/n): y
+Plan ready — press Tab (or run /mode execute) to start applying the plan.
+
+# Press Tab. Now the model is in EXECUTE mode and works through the todos.
 
 [EXECUTE]  edit slash-commands.ts
 [EXECUTE]  edit interactive-mode.ts (handleHelpCommand)
@@ -73,7 +97,7 @@ Plan ready. Press Tab to apply (y/n): y
 ✓ Done. /help now lists every command.
 ```
 
-That's the whole loop: **prompt → plan → apply → verify**. You watch it iterate.
+That's the whole loop: **prompt → plan → apply → verify**, with the active plan visible in the sticky todo list at the bottom of the screen as the agent works through it.
 
 ---
 

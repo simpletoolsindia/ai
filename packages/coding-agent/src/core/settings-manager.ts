@@ -1151,11 +1151,10 @@ export class SettingsManager {
 	 * Persisted to `settings.json: { agentMode: "plan" | "execute" }`.
 	 */
 	getAgentMode(): "plan" | "execute" {
-		const m = this.settings.agentMode;
-		// Default is "plan" — a safer default that prevents the model
-		// from writing files in a brand-new session. The user can run
-		// `/mode execute` (or press Tab) to switch.
-		if (m === "execute") return "execute";
+		// Always start in PLAN mode regardless of persisted setting.
+		// The user switches to EXECUTE per-session via Tab or /mode.
+		// This prevents the agent from accidentally writing files on
+		// first launch after a previous session used EXECUTE.
 		return "plan";
 	}
 

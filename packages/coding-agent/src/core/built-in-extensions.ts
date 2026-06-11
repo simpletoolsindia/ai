@@ -15,14 +15,23 @@ import type { ExtensionFactory } from "./extensions/types.ts";
 // Each built-in is a factory `(pi) => void` that follows the same shape
 // as a user-extension's default export.
 import hermesMemoryFactory from "./extensions/built-in/hermes-memory/index.ts";
+import contextModeFactory from "./extensions/built-in/context-mode/index.ts";
 
 /**
  * Built-in extensions that are always loaded. Order matters for tool
  * registration: later factories can override earlier ones, but in
  * practice each built-in registers a distinct tool namespace.
+ *
+ * context-mode is OPT-IN (controlled by `contextMode.enabled` in
+ * settings.json). When disabled, its factory returns early after a
+ * single session_start log; no MCP subprocess is spawned and no ctx_*
+ * tools are registered. This keeps the default ai experience
+ * unchanged and avoids the cost of a subprocess + SQLite for users
+ * who don't need it.
  */
 export const BUILT_IN_EXTENSION_FACTORIES: ExtensionFactory[] = [
 	hermesMemoryFactory,
+	contextModeFactory,
 ];
 
 /**
@@ -31,4 +40,5 @@ export const BUILT_IN_EXTENSION_FACTORIES: ExtensionFactory[] = [
  */
 export const BUILT_IN_EXTENSION_IDS: readonly string[] = [
 	"hermes-memory",
+	"context-mode",
 ] as const;

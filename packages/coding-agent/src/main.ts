@@ -26,6 +26,7 @@ import { AuthStorage } from "./core/auth-storage.ts";
 import { exportFromFile } from "./core/export-html/index.ts";
 import { emitProjectTrustEvent } from "./core/extensions/runner.ts";
 import type { ExtensionFactory, LoadExtensionsResult, ProjectTrustContext } from "./core/extensions/types.ts";
+import { BUILT_IN_EXTENSION_FACTORIES } from "./core/built-in-extensions.ts";
 import { configureHttpDispatcher } from "./core/http-dispatcher.ts";
 import { KeybindingsManager } from "./core/keybindings.ts";
 import type { ModelRegistry } from "./core/model-registry.ts";
@@ -696,6 +697,14 @@ export async function main(args: string[], options?: MainOptions) {
 		process.env.PI_SKIP_VERSION_CHECK = "1";
 	}
 
+	// Built-in extensions are always loaded unless the user explicitly
+	// passes --no-extensions. User-supplied factories (via options) come
+	// after, so they can observe or extend the built-ins' registrations.
+	const allExtensionFactories: ExtensionFactory[] = [
+		...BUILT_IN_EXTENSION_FACTORIES,
+		...(options?.extensionFactories ?? []),
+	];
+
 	if (process.platform === "win32") {
 		cleanupWindowsSelfUpdateQuarantine(getPackageDir());
 	}
@@ -867,7 +876,7 @@ export async function main(args: string[], options?: MainOptions) {
 				noContextFiles: parsed.noContextFiles,
 				systemPrompt: parsed.systemPrompt,
 				appendSystemPrompt: parsed.appendSystemPrompt,
-				extensionFactories: options?.extensionFactories,
+				extensionFactories: allExtensionFactories,
 			},
 		});
 		const { settingsManager, modelRegistry, resourceLoader } = services;

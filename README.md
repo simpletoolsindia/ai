@@ -82,7 +82,7 @@ rm -rf ~/.ai ~/.local/bin/ai
 
 ```bash
 # Specific version / branch / commit
-curl -fsSL https://raw.githubusercontent.com/simpletoolsindia/ai/main/install.sh | bash -s -- --ref v0.79.4
+curl -fsSL https://raw.githubusercontent.com/simpletoolsindia/ai/main/install.sh | bash -s -- --ref v0.79.5
 
 # Local checkout (for development)
 git clone https://github.com/simpletoolsindia/ai.git
@@ -131,6 +131,12 @@ In interactive mode you can:
 | `/subagent` | spawn a subagent manually |
 | `Esc Esc` | session tree (branch / fork / resume) |
 | `Ctrl+C` | cancel the current operation |
+
+## What's new in 0.79.5
+
+Hotfix release:
+
+- **Plan mode is now honored at session startup** — the persisted `agentMode` in `settings.json` filters the initial tool list, so a brand-new session launched in plan mode already has `write`/`edit`/`bash` removed. Previously, the filter only applied if you ran `/mode` interactively.
 
 ## What's new in 0.79.4
 

@@ -2,6 +2,14 @@
 
 > **Fork notice:** This is the changelog for **ai**, a fork of [pi](https://github.com/earendil-works/pi). Entries up to and including v0.78.1 are inherited verbatim from the upstream pi project. Starting with the first ai release, new entries are added by this fork. See [NOTICE.md](https://github.com/simpletoolsindiaorg/ai/blob/main/NOTICE.md) for the full fork attribution.
 
+## [0.79.5] - 2026-06-11
+
+Hotfix release.
+
+### Fixed
+
+- **Plan mode is now honored at session startup** — the persisted `agentMode` in `settings.json` filters the initial tool list at `AgentSession` construction, so a brand-new session launched in plan mode already has `write`/`edit`/`bash` removed. Previously the filter only applied if the user ran `/mode` interactively during the session.
+
 ## [0.79.4] - 2026-06-11
 
 The final production build. Two new features for safe, visible control over the agent.

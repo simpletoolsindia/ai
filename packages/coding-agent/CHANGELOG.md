@@ -2,6 +2,23 @@
 
 > **Fork notice:** This is the changelog for **ai**, a fork of [pi](https://github.com/earendil-works/pi). Entries up to and including v0.78.1 are inherited verbatim from the upstream pi project. Starting with the first ai release, new entries are added by this fork. See [NOTICE.md](https://github.com/simpletoolsindiaorg/ai/blob/main/NOTICE.md) for the full fork attribution.
 
+## [0.79.1] - 2026-06-11
+
+Quality-of-life batch. Every fix in this release was found in real testing on a fresh install.
+
+### New Features
+
+- **`/searcheng` slash command** — view or update the SearXNG endpoint used by the `websearch` tool at runtime. With no argument it prints the current URL; with a URL it validates, probes with a 5-second `GET`, writes to `~/.ai/agent/models.json`, and updates the in-memory registry. **No restart required.**
+- **`providers.websearch` config now actually works** — the `baseUrl` (and `maxResults`, `language`, `safesearch`, `timeRange`, `headers`) fields were documented but the code used a hardcoded `DEFAULT_SEARCH_URL`. The full config is now plumbed end-to-end through `ModelRegistry` → `AgentSession` → `websearch` tool. Use `/searcheng` to change the URL interactively.
+- **Auto-discovery runs before `--model` resolution** — `refreshDiscoveredModels()` now runs at the very start of session setup, so `--model ollama/<id>` works on the first invocation with a freshly-written `models.json`. Previously it ran *after* the CLI model was resolved, so auto-discovered models could not be selected by name on the first run.
+- **Local Ollama SDK error fixed** — the OpenAI SDK throws `MissingApiKeyError` for `new OpenAI({apiKey: ""})`, so optional-auth providers (local Ollama, vLLM, LM Studio) failed at the SDK boundary. A placeholder is now substituted only for `optionalApiKey: true` providers; Ollama and friends ignore the resulting `Authorization: Bearer anonymous` header. Add `ModelRegistry.isProviderAuthOptional(provider)` for runtime introspection.
+
+### Added
+
+- `ModelRegistry.isProviderAuthOptional(provider)` and `ModelRegistry.getWebsearchConfig()` / `setWebsearchConfig()` for runtime and test introspection.
+- `WebsearchToolOptions` extended with `defaultLimit`, `defaultLanguage`, `defaultSafesearch`, `defaultTimeRange`, and `headers`; the `websearch` operation now always sends `Accept: application/json` and merges user headers.
+- 30 new tests across `websearch-config.test.ts` (16) and `searcheng-command.test.ts` (14), covering URL normalization, default value validation, models.json round-tripping, header merging, and the persistence path.
+
 ## [Unreleased]
 
 ### New Features

@@ -43,6 +43,7 @@ curl -fsSL https://raw.githubusercontent.com/simpletoolsindia/ai/main/install.sh
 
 - [Install](#install)
 - [Quick start](#quick-start)
+- [What's new in 0.79.1](#whats-new-in-0791)
 - [What's in the box](#whats-in-the-box)
 - [Local Ollama](#local-ollama)
 - [Persistent memory](#persistent-memory)
@@ -100,7 +101,7 @@ Run `ai --help` for the full CLI reference.
 ```bash
 # Sanity check
 ai --version
-#   0.79.0
+#   0.79.1
 
 # Ask anything (uses the default model from settings.json)
 ai -p "What is the gold price in India right now?"
@@ -119,6 +120,7 @@ In interactive mode you can:
 |---|---|
 | `/model` | pick a model (fuzzy search, recent, scoped) |
 | `/login` | OAuth / API key login for a cloud provider |
+| `/searcheng` | view or update the SearXNG endpoint used by `websearch` |
 | `/scout-stack-auto` | run all configured subagents in parallel |
 | `/scout-backend` `/scout-db` `/scout-frontend` | run a specific domain scout |
 | `/scout-infra` `/scout-tests` `/scout-security` `/scout-config` | more domain scouts |
@@ -127,6 +129,17 @@ In interactive mode you can:
 | `/subagent` | spawn a subagent manually |
 | `Esc Esc` | session tree (branch / fork / resume) |
 | `Ctrl+C` | cancel the current operation |
+
+## What's new in 0.79.1
+
+A batch of quality-of-life fixes that were requested in real testing:
+
+- **`/searcheng` slash command** — view or update the SearXNG endpoint used by `websearch` at runtime. No restart required. With no arg it prints the current URL; with a URL it validates, probes with a 5-second `GET`, and writes the new value to `~/.ai/agent/models.json`. See [Pluggable web tools](#pluggable-web-tools).
+- **`providers.websearch` is now actually honored** — the `baseUrl` field was documented but the code used a hardcoded default. The full config (`baseUrl`, `maxResults`, `language`, `safesearch`, `timeRange`, `headers`) is plumbed end-to-end from `models.json` through to the tool.
+- **Local Ollama "No API key" regression fixed** — auto-discovered Ollama models could not be selected by name on the first invocation with a freshly-written `models.json` because model discovery ran *after* CLI model resolution. Discovery now runs first.
+- **Local Ollama SDK error fixed** — the OpenAI SDK throws `MissingApiKeyError` for `new OpenAI({apiKey: ""})`, so optional-auth providers (local Ollama, vLLM, LM Studio) failed at the SDK boundary. A placeholder is now substituted only for `optionalApiKey: true` providers; Ollama and friends ignore the resulting `Authorization: Bearer anonymous` header.
+- **Skill missing-description is now an info note, not a warning** — if your `SKILL.md` has no `description` in the frontmatter, `ai` derives one from the first heading and shows a muted `[Skill notes]` line at startup. Add `description: …` to silence it.
+- **Better model-registry schema** — `optionalApiKey: true` and `autoDiscover: "ollama"` are now first-class fields in the `models.json` provider config.
 
 ## What's in the box
 
@@ -192,9 +205,16 @@ If you run Ollama locally on the default port, add this to `~/.ai/agent/models.j
 }
 ```
 
+| Field | Notes |
+|---|---|
+| `baseUrl` | OpenAI-compatible endpoint. `11434` is the default Ollama port. |
+| `api` | `"openai-completions"` (Ollama exposes an OpenAI-compatible API). |
+| `optionalApiKey` | `true` — Ollama doesn't require auth. The SDK is given a placeholder key. |
+| `autoDiscover` | `"ollama"` — calls `GET <baseUrl-stripped-of-/v1>/api/tags` at startup and adds every model. |
+
 Now `ai` will:
 
-- **Auto-discover** all your installed Ollama models on every startup
+- **Auto-discover** all your installed Ollama models on every startup (and on demand from the model picker)
 - Show them in `ai --list-models`
 - Let you select any of them with `--model ollama/<tag>` or via the interactive picker
 - Send requests **without requiring an API key** (`optionalApiKey: true`)
@@ -272,7 +292,9 @@ If the MCP server fails to start, the rest of `ai` keeps working. The extension 
 
 Built-in `websearch` and `webfetch` tools.
 
-`websearch` queries a SearXNG (or compatible) instance. Configure in `~/.ai/agent/models.json`:
+### `websearch` (SearXNG)
+
+`websearch` queries a SearXNG (or compatible) instance. The endpoint is configurable end-to-end via `~/.ai/agent/models.json`:
 
 ```json
 {
@@ -289,14 +311,25 @@ Built-in `websearch` and `webfetch` tools.
 }
 ```
 
-To view or change the endpoint at runtime, use the built-in `/searcheng` slash command:
+| Field | Default | Notes |
+|---|---|---|
+| `baseUrl` | `https://search.sridharhomelab.in/search` | The SearXNG instance. Add or strip `/search`; the tool normalizes it. |
+| `maxResults` | `10` | Number of results to fetch. |
+| `language` | `"en"` | SearXNG language code (`en`, `de`, `fr`, …). |
+| `safesearch` | `"0"` | `"0"` (off), `"1"` (moderate), `"2"` (strict). |
+| `timeRange` | (none) | `"day"`, `"week"`, `"month"`, or `"year"`. |
+| `headers` | `{}` | Extra HTTP headers to send with every request. `Accept: application/json` is always sent. |
+
+**Runtime updates** — use the built-in `/searcheng` slash command to view or change the endpoint without restarting:
 
 ```
 /searcheng                              # show current endpoint
 /searcheng https://search.example.com   # validate, test, and save
 ```
 
-The slash command writes the new value to `models.json` and updates the in-memory registry; no restart required.
+The slash command writes the new value to `models.json` and updates the in-memory registry; the next `websearch` call uses the new value immediately.
+
+### `webfetch` (any URL)
 
 `webfetch` retrieves any URL. If the response exceeds the inline cap (default 100KB), the full content is written to `~/.ai/agent/cache/webfetch/` and the LLM is told the path so it can `read` the file on demand.
 

@@ -163,6 +163,25 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			return;
 		}
 
+		// Render what we have so far, so the UI isn't blocked on discovery.
+		this.applyLoadedModels(models);
+
+		// Now run auto-discovery for any provider that has it configured.
+		// This is best-effort: if the server is down we keep the static list.
+		const added = await this.modelRegistry.refreshDiscoveredModels();
+		if (added > 0) {
+			const refreshed = this.modelRegistry.getAvailable();
+			const merged = refreshed.map((model: Model<any>) => ({
+				provider: model.provider,
+				id: model.id,
+				model,
+			}));
+			this.applyLoadedModels(merged);
+			this.tui.requestRender();
+		}
+	}
+
+	private applyLoadedModels(models: ModelItem[]): void {
 		this.allModels = this.sortModels(models);
 		this.scopedModels = this.scopedModels.map((scoped) => {
 			const refreshed = this.modelRegistry.find(scoped.model.provider, scoped.model.id);
@@ -178,6 +197,8 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		const currentIndex = this.filteredModels.findIndex((item) => modelsAreEqual(this.currentModel, item.model));
 		this.selectedIndex =
 			currentIndex >= 0 ? currentIndex : Math.min(this.selectedIndex, Math.max(0, this.filteredModels.length - 1));
+		// Re-apply any active filter so the user sees the merged list consistently.
+		this.filterModels(this.searchInput.getValue());
 	}
 
 	private sortModels(models: ModelItem[]): ModelItem[] {

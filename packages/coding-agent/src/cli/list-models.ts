@@ -32,6 +32,11 @@ export async function listModels(modelRegistry: ModelRegistry, searchPattern?: s
 		console.error(chalk.yellow(`Warning: errors loading models.json:\n${loadError}`));
 	}
 
+	// If the user has any autoDiscover providers configured, run discovery
+	// so that locally-installed models (e.g. Ollama) are listed here too.
+	// refreshDiscoveredModels() mutates the registry's model list; for
+	// --list-models that is fine since the process is about to exit.
+	await modelRegistry.refreshDiscoveredModels();
 	const models = modelRegistry.getAvailable();
 
 	if (models.length === 0) {

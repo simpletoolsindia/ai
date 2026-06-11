@@ -117,13 +117,55 @@ function validateName(name: string): string[] {
 function validateDescription(description: string | undefined): string[] {
 	const errors: string[] = [];
 
-	if (!description || description.trim() === "") {
-		errors.push("description is required");
-	} else if (description.length > MAX_DESCRIPTION_LENGTH) {
+	if (description && description.length > MAX_DESCRIPTION_LENGTH) {
 		errors.push(`description exceeds ${MAX_DESCRIPTION_LENGTH} characters (${description.length})`);
 	}
 
 	return errors;
+}
+
+/**
+ * Derive a description from the skill body when the frontmatter
+ * doesn't include one. Uses the first non-empty meaningful line:
+ * - First H1/H2 heading if present
+ * - Otherwise the first non-empty paragraph line, truncated
+ *
+ * The goal is to give the LLM *something* to decide when to invoke
+ * the skill, even when the author didn't write an explicit description.
+ * Returns undefined if no useful text can be extracted.
+ */
+export function deriveDescriptionFromBody(body: string): string | undefined {
+	const MAX_LEN = 200;
+	const lines = body.split(/\r?\n/);
+
+	// First, look for a heading (H1 or H2) and use its text
+	for (const rawLine of lines) {
+		const line = rawLine.trim();
+		if (!line) continue;
+		const headingMatch = line.match(/^#{1,2}\s+(.+?)\s*#*\s*$/);
+		if (headingMatch) {
+			const text = headingMatch[1].trim();
+			if (text.length > 0) {
+				return text.length > MAX_LEN ? `${text.slice(0, MAX_LEN - 1)}…` : text;
+			}
+		}
+		// Stop scanning at the first non-empty line regardless of whether it was a heading
+		break;
+	}
+
+	// No heading: take the first non-empty paragraph line
+	for (const rawLine of lines) {
+		const line = rawLine.trim();
+		if (!line) continue;
+		// Skip things that look like frontmatter or code fences
+		if (line.startsWith("---") || line.startsWith("```") || line.startsWith("#")) continue;
+		// Strip leading bullet/number list markers
+		const cleaned = line.replace(/^[-*+]\s+/, "").replace(/^\d+\.\s+/, "");
+		if (cleaned.length === 0) continue;
+		return cleaned.length > MAX_LEN ? `${cleaned.slice(0, MAX_LEN - 1)}…` : cleaned;
+	}
+
+	return undefined;
 }
 
 export interface LoadSkillsFromDirOptions {
@@ -282,14 +324,39 @@ function loadSkillFromFile(
 
 	try {
 		const rawContent = readFileSync(filePath, "utf-8");
-		const { frontmatter } = parseFrontmatter<SkillFrontmatter>(rawContent);
+		const { frontmatter, body } = parseFrontmatter<SkillFrontmatter>(rawContent);
 		const skillDir = dirname(filePath);
 		const parentDirName = basename(skillDir);
 
-		// Validate description
-		const descErrors = validateDescription(frontmatter.description);
-		for (const error of descErrors) {
-			diagnostics.push({ type: "warning", message: error, path: filePath });
+		// Use description from frontmatter, or fall back to deriving it from the body
+		let description = frontmatter.description?.trim();
+		let descriptionWasDerived = false;
+		if (!description || description.length === 0) {
+			const derived = deriveDescriptionFromBody(body);
+			if (derived) {
+				description = derived;
+				descriptionWasDerived = true;
+				diagnostics.push({
+					type: "warning",
+					message: `No 'description' in frontmatter; using first heading as fallback: "${derived}"`,
+					path: filePath,
+				});
+			} else {
+				diagnostics.push({
+					type: "warning",
+					message: "Skill has no description and no extractable heading; skipping load. Add a 'description' field to the frontmatter.",
+					path: filePath,
+				});
+				return { skill: null, diagnostics };
+			}
+		}
+
+		// Validate description length (only if not derived; derived ones are already truncated)
+		if (!descriptionWasDerived) {
+			const descErrors = validateDescription(description);
+			for (const error of descErrors) {
+				diagnostics.push({ type: "warning", message: error, path: filePath });
+			}
 		}
 
 		// Use name from frontmatter, or fall back to parent directory name
@@ -301,15 +368,11 @@ function loadSkillFromFile(
 			diagnostics.push({ type: "warning", message: error, path: filePath });
 		}
 
-		// Still load the skill even with warnings (unless description is completely missing)
-		if (!frontmatter.description || frontmatter.description.trim() === "") {
-			return { skill: null, diagnostics };
-		}
-
+		// Skill is loaded (description is guaranteed non-empty at this point)
 		return {
 			skill: {
 				name,
-				description: frontmatter.description,
+				description,
 				filePath,
 				baseDir: skillDir,
 				sourceInfo: createSkillSourceInfo(filePath, skillDir, source),

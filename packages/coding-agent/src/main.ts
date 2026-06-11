@@ -882,6 +882,12 @@ export async function main(args: string[], options?: MainOptions) {
 		];
 
 		const modelPatterns = parsed.models ?? settingsManager.getEnabledModels();
+
+		// Run auto-discovery for any providers configured with `autoDiscover`
+		// (e.g. local Ollama) so that --model <provider>/<id> works in print
+		// mode and the model can be selected in the interactive model selector.
+		await modelRegistry.refreshDiscoveredModels();
+
 		const scopedModels =
 			modelPatterns && modelPatterns.length > 0 ? await resolveModelScope(modelPatterns, modelRegistry) : [];
 		const {

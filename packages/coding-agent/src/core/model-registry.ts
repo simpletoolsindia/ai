@@ -202,6 +202,23 @@ const ProviderConfigSchema = Type.Object({
 	authHeader: Type.Optional(Type.Boolean()),
 	models: Type.Optional(Type.Array(ModelDefinitionSchema)),
 	modelOverrides: Type.Optional(Type.Record(Type.String(), ModelOverrideSchema)),
+	/**
+	 * When true, the provider does not require an API key. The model is
+	 * considered "configured" and invokable even when no apiKey is set in
+	 * models.json, env, or auth storage. Use this for local inference
+	 * servers (Ollama, LM Studio, vLLM, etc.) where the endpoint accepts
+	 * unauthenticated requests.
+	 */
+	optionalApiKey: Type.Optional(Type.Boolean()),
+	/**
+	 * When set, dynamically discover models from the provider's local API
+	 * and merge them into the registry on refresh. Currently supported:
+	 *   - "ollama": hits <baseUrl without /v1>/api/tags
+	 * Discovered models are appended to any models listed in `models`.
+	 * Discovery is best-effort; if the server is unreachable the static
+	 * list is still available.
+	 */
+	autoDiscover: Type.Optional(Type.Union([Type.Literal("ollama")])),
 });
 
 const ModelsConfigSchema = Type.Object({
@@ -235,6 +252,20 @@ interface ProviderRequestConfig {
 	apiKey?: string;
 	headers?: Record<string, string>;
 	authHeader?: boolean;
+}
+
+/**
+ * Per-provider flags loaded from models.json that aren't part of the
+ * request auth/headers config but affect how the provider is presented
+ * to the user (auth requirement) and how models are sourced (auto-discovery).
+ */
+interface ProviderOptions {
+	/** True if the provider does not require an API key. */
+	optionalApiKey?: boolean;
+	/** Auto-discovery mode (e.g., "ollama"). */
+	autoDiscover?: "ollama";
+	/** Last-known baseUrl for discovery (so it survives across refreshes). */
+	baseUrl?: string;
 }
 
 function migrateLegacyRegisterProviderConfigValue(providerName: string, field: string, value: string): string {
@@ -409,6 +440,21 @@ export class ModelRegistry {
 	private modelRequestHeaders: Map<string, Record<string, string>> = new Map();
 	private registeredProviders: Map<string, ProviderConfigInput> = new Map();
 	private loadError: string | undefined = undefined;
+	/**
+	 * Per-provider flags from models.json: optionalApiKey, autoDiscover.
+	 * These are loaded alongside models and used by hasConfiguredAuth() and
+	 * discoverOllamaModels().
+	 */
+	private providerOptions: Map<string, ProviderOptions> = new Map();
+	/**
+	 * Cache of last successful Ollama discovery per provider, so the model
+	 * selector doesn't re-hit /api/tags on every refresh. Keyed by provider.
+	 */
+	private ollamaDiscoveryCache: Map<string, { models: Model<Api>[]; fetchedAt: number }> = new Map();
+	/**
+	 * In-flight Ollama discovery promises, so concurrent calls share one fetch.
+	 */
+	private ollamaDiscoveryInflight: Map<string, Promise<Model<Api>[]>> = new Map();
 	readonly authStorage: AuthStorage;
 	private modelsJsonPath: string | undefined;
 
@@ -432,6 +478,10 @@ export class ModelRegistry {
 	refresh(): void {
 		this.providerRequestConfigs.clear();
 		this.modelRequestHeaders.clear();
+		this.providerOptions.clear();
+		// Note: ollamaDiscoveryCache is NOT cleared so a transient /api/tags
+		// failure doesn't make the user lose their model list until the
+		// next successful fetch.
 		this.loadError = undefined;
 
 		// Ensure dynamic API/OAuth registrations are rebuilt from current provider state.
@@ -569,6 +619,16 @@ export class ModelRegistry {
 						this.storeModelHeaders(providerName, modelId, modelOverride.headers);
 					}
 				}
+
+				// Capture per-provider flags (optionalApiKey, autoDiscover) used
+				// by hasConfiguredAuth() and discoverOllamaModels().
+				if (providerConfig.optionalApiKey || providerConfig.autoDiscover) {
+					this.providerOptions.set(providerName, {
+						optionalApiKey: providerConfig.optionalApiKey,
+						autoDiscover: providerConfig.autoDiscover,
+						baseUrl: providerConfig.baseUrl,
+					});
+				}
 			}
 
 			return { models: this.parseModels(config), overrides, modelOverrides, error: undefined };
@@ -604,8 +664,10 @@ export class ModelRegistry {
 				if (!providerConfig.baseUrl) {
 					throw new Error(`Provider ${providerName}: "baseUrl" is required when defining custom models.`);
 				}
-				if (!providerConfig.apiKey) {
-					throw new Error(`Provider ${providerName}: "apiKey" is required when defining custom models.`);
+				if (!providerConfig.apiKey && !providerConfig.optionalApiKey) {
+					throw new Error(
+						`Provider ${providerName}: "apiKey" is required when defining custom models (or set "optionalApiKey: true" for local servers that don't need auth).`,
+					);
 				}
 			}
 			// Built-in providers with custom models: baseUrl/apiKey/api are optional,
@@ -618,8 +680,7 @@ export class ModelRegistry {
 					throw new Error(
 						`Provider ${providerName}, model ${modelDef.id}: no "api" specified. Set at provider or model level.`,
 					);
-				}
-				// For built-in providers, api is optional — inherited from built-in models.
+				}				// For built-in providers, api is optional — inherited from built-in models.
 
 				if (!modelDef.id) throw new Error(`Provider ${providerName}: model missing "id"`);
 				// Validate contextWindow/maxTokens only if provided (they have defaults)
@@ -702,6 +763,194 @@ export class ModelRegistry {
 	}
 
 	/**
+	 * Discover models from a local Ollama server. Called by the model
+	 * selector for any provider that has `autoDiscover: "ollama"` in
+	 * models.json.
+	 *
+	 * Hits `<baseUrl with /v1 stripped>/api/tags` (Ollama's native REST
+	 * endpoint). Each discovered model is shaped as an openai-completions
+	 * model pointing at the same baseUrl, so the rest of the pipeline
+	 * (auth, request, streaming) works unchanged.
+	 *
+	 * The result is cached for 60s per provider, so re-opening the model
+	 * selector doesn't keep hitting the server. A fetch is in-flight at
+	 * most once per provider.
+	 *
+	 * On any failure (server down, network error, non-Ollama server) the
+	 * previously-cached models are kept, so a transient outage doesn't
+	 * empty the model list. If no cache exists, returns [].
+	 */
+	async discoverOllamaModels(provider: string): Promise<Model<Api>[]> {
+		const cached = this.ollamaDiscoveryCache.get(provider);
+		if (cached && Date.now() - cached.fetchedAt < 60_000) {
+			return cached.models;
+		}
+		const inflight = this.ollamaDiscoveryInflight.get(provider);
+		if (inflight) {
+			return inflight;
+		}
+		const promise = this.fetchOllamaModels(provider);
+		this.ollamaDiscoveryInflight.set(provider, promise);
+		try {
+			const models = await promise;
+			this.ollamaDiscoveryCache.set(provider, { models, fetchedAt: Date.now() });
+			return models;
+		} finally {
+			this.ollamaDiscoveryInflight.delete(provider);
+		}
+	}
+
+	private async fetchOllamaModels(provider: string): Promise<Model<Api>[]> {
+		const options = this.providerOptions.get(provider);
+		if (!options || options.autoDiscover !== "ollama") return [];
+		const baseUrl = options.baseUrl;
+		if (!baseUrl) return [];
+
+		// Ollama's /api/tags lives at the host root, not under /v1.
+		// E.g. http://localhost:11434/v1 -> http://localhost:11434/api/tags
+		const ollamaTagsUrl = baseUrl.replace(/\/v1\/?$/, "") + "/api/tags";
+
+		const providerConfig = this.providerRequestConfigs.get(provider);
+		const apiKey = providerConfig?.apiKey
+			? resolveConfigValueUncached(providerConfig.apiKey)
+			: undefined;
+
+		const headers: Record<string, string> = {
+			Accept: "application/json",
+		};
+		if (apiKey) {
+			headers.Authorization = `Bearer ${apiKey}`;
+		}
+
+		const previous = this.ollamaDiscoveryCache.get(provider)?.models;
+
+		let response: Response;
+		try {
+			response = await fetch(ollamaTagsUrl, { method: "GET", headers, signal: AbortSignal.timeout(5000) });
+		} catch {
+			// Network error or timeout: keep whatever we have cached.
+			return previous ?? [];
+		}
+		if (!response.ok) {
+			return previous ?? [];
+		}
+
+		let body: unknown;
+		try {
+			body = await response.json();
+		} catch {
+			return previous ?? [];
+		}
+
+		const tags = (body as { models?: Array<{ name: string }> }).models;
+		if (!Array.isArray(tags)) {
+			return previous ?? [];
+		}
+
+		// Build a model entry for each tag. Defaults are conservative for
+		// local models; users can override with modelOverrides in models.json.
+		const models: Model<Api>[] = tags
+			.filter((t) => t && typeof t.name === "string" && t.name.length > 0)
+			.map((t) => ({
+				id: t.name,
+				name: t.name,
+				api: "openai-completions" as const,
+				provider,
+				baseUrl,
+				reasoning: false,
+				input: ["text"] as ("text" | "image")[],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 128000,
+				maxTokens: 16384,
+				headers: undefined,
+				compat: undefined,
+			}));
+
+		// Apply modelOverrides if any.
+		const overrides = this.loadModelOverridesForProvider(provider);
+		if (overrides) {
+			for (let i = 0; i < models.length; i++) {
+				const ov = overrides.get(models[i].id);
+				if (ov) models[i] = applyModelOverride(models[i], ov);
+			}
+		}
+
+		return models;
+	}
+
+	/**
+	 * Get the list of providers configured for auto-discovery.
+	 */
+	getAutoDiscoverProviders(): string[] {
+		const out: string[] = [];
+		for (const [name, opts] of this.providerOptions.entries()) {
+			if (opts.autoDiscover) out.push(name);
+		}
+		return out;
+	}
+
+	/**
+	 * Discover models for all configured auto-discover providers in
+	 * parallel, and add the results to `this.models` (deduped by
+	 * provider+id against existing models). The merge is idempotent —
+	 * calling this multiple times is safe.
+	 *
+	 * Returns the number of newly-added models.
+	 *
+	 * Note: this mutates the registry's model list. Callers that want
+	 * a non-mutating list should call `getAutoDiscoverProviders()` and
+	 * `discoverOllamaModels()` directly.
+	 */
+	async refreshDiscoveredModels(): Promise<number> {
+		const providers = this.getAutoDiscoverProviders();
+		if (providers.length === 0) return 0;
+		const results = await Promise.allSettled(providers.map((p) => this.discoverOllamaModels(p)));
+		const existing = new Set(this.models.map((m) => `${m.provider}/${m.id}`));
+		let added = 0;
+		for (let i = 0; i < results.length; i++) {
+			const r = results[i];
+			if (r.status !== "fulfilled") continue;
+			for (const m of r.value) {
+				const key = `${m.provider}/${m.id}`;
+				if (!existing.has(key)) {
+					this.models.push(m);
+					existing.add(key);
+					added++;
+				}
+			}
+		}
+		return added;
+	}
+
+	/**
+	 * Return the per-model override map for a provider (loaded from
+	 * models.json's `modelOverrides` field). Used by Ollama discovery
+	 * to apply user-configured contextWindow/maxTokens/compat to
+	 * auto-discovered models.
+	 */
+	private loadModelOverridesForProvider(provider: string): Map<string, ModelOverride> | undefined {
+		if (!this.modelsJsonPath) return undefined;
+		// Cheap path: re-parse models.json. The alternative is to cache
+		// the override map on the registry instance; the current load
+		// already does this internally but doesn't expose it. For now,
+		// re-reading the file is acceptable because:
+		//  - it happens at most once per provider per 60s (cache TTL)
+		//  - models.json is tiny (typically a few KB)
+		//  - it picks up edits to models.json that happened after refresh
+		try {
+			const content = readFileSync(this.modelsJsonPath, "utf-8");
+			const parsed = JSON.parse(stripJsonComments(content)) as { providers?: Record<string, { modelOverrides?: Record<string, ModelOverride> }> };
+			const providerConfig = parsed.providers?.[provider];
+			const overrides = providerConfig?.modelOverrides;
+			if (!overrides) return undefined;
+			return new Map(Object.entries(overrides));
+		} catch {
+			return undefined;
+		}
+	}
+
+
+	/**
 	 * Find a model by provider and ID.
 	 */
 	find(provider: string, modelId: string): Model<Api> | undefined {
@@ -710,8 +959,17 @@ export class ModelRegistry {
 
 	/**
 	 * Get API key for a model.
+	 *
+	 * Returns true if the model can be invoked. True when:
+	 *  - auth is configured in auth storage (env var, OAuth, etc.)
+	 *  - apiKey is configured in models.json and is a usable value
+	 *  - the provider is marked optionalApiKey: true in models.json
+	 *    (e.g. local Ollama, LM Studio, vLLM)
 	 */
 	hasConfiguredAuth(model: Model<Api>): boolean {
+		if (this.providerOptions.get(model.provider)?.optionalApiKey) {
+			return true;
+		}
 		const providerApiKey = this.providerRequestConfigs.get(model.provider)?.apiKey;
 		return (
 			this.authStorage.hasAuth(model.provider) ||
@@ -753,16 +1011,34 @@ export class ModelRegistry {
 
 	/**
 	 * Get API key and request headers for a model.
+	 *
+	 * For providers marked `optionalApiKey: true` in models.json, returns
+	 * `ok: true` with no apiKey when none is configured, so the local
+	 * inference server can be invoked without auth.
 	 */
 	async getApiKeyAndHeaders(model: Model<Api>): Promise<ResolvedRequestAuth> {
 		try {
 			const providerConfig = this.providerRequestConfigs.get(model.provider);
+			const providerOptions = this.providerOptions.get(model.provider);
+			const optionalApiKey = providerOptions?.optionalApiKey === true;
 			const apiKeyFromAuthStorage = await this.authStorage.getApiKey(model.provider, { includeFallback: false });
-			const apiKey =
-				apiKeyFromAuthStorage ??
-				(providerConfig?.apiKey
-					? resolveConfigValueOrThrow(providerConfig.apiKey, `API key for provider "${model.provider}"`)
-					: undefined);
+			let apiKey: string | undefined;
+			try {
+				apiKey =
+					apiKeyFromAuthStorage ??
+					(providerConfig?.apiKey
+						? resolveConfigValueOrThrow(providerConfig.apiKey, `API key for provider "${model.provider}"`)
+						: undefined);
+			} catch (resolveError) {
+				// If the user provided an apiKey in models.json that fails to
+				// resolve, fall back to "no key" rather than erroring out
+				// — but only for optionalApiKey providers. For required-auth
+				// providers, surface the error as before.
+				if (!optionalApiKey) {
+					throw resolveError;
+				}
+				apiKey = undefined;
+			}
 
 			const providerHeaders = resolveHeadersOrThrow(providerConfig?.headers, `provider "${model.provider}"`);
 			const modelHeaders = resolveHeadersOrThrow(
@@ -921,8 +1197,10 @@ export class ModelRegistry {
 		if (!config.baseUrl) {
 			throw new Error(`Provider ${providerName}: "baseUrl" is required when defining models.`);
 		}
-		if (!config.apiKey && !config.oauth) {
-			throw new Error(`Provider ${providerName}: "apiKey" or "oauth" is required when defining models.`);
+		if (!config.apiKey && !config.oauth && !config.optionalApiKey) {
+			throw new Error(
+				`Provider ${providerName}: "apiKey", "oauth", or "optionalApiKey: true" is required when defining models.`,
+			);
 		}
 
 		for (const modelDef of config.models) {
@@ -1015,6 +1293,13 @@ export interface ProviderConfigInput {
 	streamSimple?: (model: Model<Api>, context: Context, options?: SimpleStreamOptions) => AssistantMessageEventStream;
 	headers?: Record<string, string>;
 	authHeader?: boolean;
+	/** When true, the provider does not require an API key. Use for local
+	 *  inference servers (Ollama, LM Studio, vLLM) that accept unauthenticated
+	 *  requests. */
+	optionalApiKey?: boolean;
+	/** Auto-discover models from the provider's local API. Currently
+	 *  supported: "ollama" — hits `<baseUrl>/api/tags` to list installed models. */
+	autoDiscover?: "ollama";
 	/** OAuth provider for /login support */
 	oauth?: Omit<OAuthProviderInterface, "id">;
 	models?: Array<{

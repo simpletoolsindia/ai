@@ -1670,4 +1670,262 @@ describe("ModelRegistry", () => {
 			});
 		});
 	});
+
+	describe("optionalApiKey (local inference servers)", () => {
+		function localOllamaProvider() {
+			return {
+				baseUrl: "http://localhost:11434/v1",
+				api: "openai-completions",
+				optionalApiKey: true,
+				models: [
+					{
+						id: "gemma4:latest",
+						name: "gemma4:latest",
+						reasoning: false,
+						input: ["text"],
+						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+						contextWindow: 128000,
+						maxTokens: 16384,
+					},
+				],
+			};
+		}
+
+		test("hasConfiguredAuth returns true for optionalApiKey provider without an apiKey", () => {
+			writeRawModelsJson({ ollama: localOllamaProvider() });
+
+			const registry = ModelRegistry.create(authStorage, modelsJsonPath);
+			const model = registry.find("ollama", "gemma4:latest");
+			expect(model).toBeDefined();
+			expect(registry.hasConfiguredAuth(model!)).toBe(true);
+		});
+
+		test("getApiKeyAndHeaders returns ok=true with no apiKey for optionalApiKey provider", async () => {
+			writeRawModelsJson({ ollama: localOllamaProvider() });
+
+			const registry = ModelRegistry.create(authStorage, modelsJsonPath);
+			const model = registry.find("ollama", "gemma4:latest")!;
+			const auth = await registry.getApiKeyAndHeaders(model);
+
+			expect(auth.ok).toBe(true);
+			if (auth.ok) {
+				expect(auth.apiKey).toBeUndefined();
+			}
+		});
+
+		test("optionalApiKey provider with no models list is still valid", () => {
+			// Pure discovery config: no static models, just baseUrl + optionalApiKey.
+			writeRawModelsJson({
+				ollama: {
+					baseUrl: "http://localhost:11434/v1",
+					api: "openai-completions",
+					optionalApiKey: true,
+				},
+			});
+
+			const registry = ModelRegistry.create(authStorage, modelsJsonPath);
+			// Schema accepts it; loadError is undefined
+			expect(registry.getError()).toBeUndefined();
+		});
+
+		test("non-optionalApiKey provider with no auth in storage is not configured", () => {
+			// Same provider config as the happy path, but with optionalApiKey: false.
+			// The apiKey is a $env:NONEXISTENT reference that's not set, so it's
+			// "not configured" by isConfigValueConfigured. The model should not
+			// be considered configured.
+			writeRawModelsJson({
+				ollama: {
+					baseUrl: "http://localhost:11434/v1",
+					api: "openai-completions",
+					optionalApiKey: false,
+					apiKey: "$env:DEFINITELY_NOT_SET_12345",
+					models: [
+						{
+							id: "gemma4:latest",
+							name: "gemma4:latest",
+							reasoning: false,
+							input: ["text"],
+							cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+							contextWindow: 128000,
+							maxTokens: 16384,
+						},
+					],
+				},
+			});
+
+			const registry = ModelRegistry.create(authStorage, modelsJsonPath);
+			const model = registry.find("ollama", "gemma4:latest")!;
+			expect(registry.hasConfiguredAuth(model)).toBe(false);
+		});
+	});
+
+	describe("autoDiscover (Ollama /api/tags)", () => {
+		const originalFetch = globalThis.fetch;
+
+		afterEach(() => {
+			globalThis.fetch = originalFetch;
+		});
+
+		function makeOllamaProvider() {
+			return {
+				baseUrl: "http://localhost:11434/v1",
+				api: "openai-completions",
+				optionalApiKey: true,
+				autoDiscover: "ollama",
+			};
+		}
+
+		test("discoverOllamaModels returns models from /api/tags", async () => {
+			writeRawModelsJson({ ollama: makeOllamaProvider() });
+
+			const registry = ModelRegistry.create(authStorage, modelsJsonPath);
+
+			globalThis.fetch = vi.fn(async (url: string | URL | Request) => {
+				const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+				if (u.endsWith("/api/tags")) {
+					return new Response(
+						JSON.stringify({
+							models: [
+								{ name: "gemma4:latest" },
+								{ name: "granite4.1:8b" },
+								{ name: "llama3.1:8b-instruct-q4_0" },
+							],
+						}),
+						{ status: 200, headers: { "Content-Type": "application/json" } },
+					);
+				}
+				return new Response("not found", { status: 404 });
+			}) as unknown as typeof fetch;
+
+			const models = await registry.discoverOllamaModels("ollama");
+			expect(models).toHaveLength(3);
+			expect(models.map((m) => m.id).sort()).toEqual(["gemma4:latest", "granite4.1:8b", "llama3.1:8b-instruct-q4_0"]);
+			for (const m of models) {
+				expect(m.provider).toBe("ollama");
+				expect(m.baseUrl).toBe("http://localhost:11434/v1");
+				expect(m.api).toBe("openai-completions");
+			}
+		});
+
+		test("discoverOllamaModels caches results within 60s", async () => {
+			writeRawModelsJson({ ollama: makeOllamaProvider() });
+
+			const registry = ModelRegistry.create(authStorage, modelsJsonPath);
+
+			let callCount = 0;
+			globalThis.fetch = vi.fn(async () => {
+				callCount++;
+				return new Response(JSON.stringify({ models: [{ name: "gemma4:latest" }] }), {
+					status: 200,
+					headers: { "Content-Type": "application/json" } },
+				);
+			}) as unknown as typeof fetch;
+
+			await registry.discoverOllamaModels("ollama");
+			await registry.discoverOllamaModels("ollama");
+			await registry.discoverOllamaModels("ollama");
+			expect(callCount).toBe(1);
+		});
+
+		test("discoverOllamaModels returns empty on network error (no prior cache)", async () => {
+			writeRawModelsJson({ ollama: makeOllamaProvider() });
+
+			const registry = ModelRegistry.create(authStorage, modelsJsonPath);
+
+			globalThis.fetch = vi.fn(async () => {
+				throw new Error("ECONNREFUSED");
+			}) as unknown as typeof fetch;
+
+			const models = await registry.discoverOllamaModels("ollama");
+			expect(models).toEqual([]);
+		});
+
+		test("discoverOllamaModels returns prior cache on network error", async () => {
+			writeRawModelsJson({ ollama: makeOllamaProvider() });
+
+			const registry = ModelRegistry.create(authStorage, modelsJsonPath);
+
+			// First call succeeds
+			globalThis.fetch = vi.fn(async () => {
+				return new Response(JSON.stringify({ models: [{ name: "gemma4:latest" }] }), {
+					status: 200,
+					headers: { "Content-Type": "application/json" } },
+				);
+			}) as unknown as typeof fetch;
+			await registry.discoverOllamaModels("ollama");
+
+			// Second call fails
+			globalThis.fetch = vi.fn(async () => {
+				throw new Error("ECONNREFUSED");
+			}) as unknown as typeof fetch;
+			const models = await registry.discoverOllamaModels("ollama");
+			expect(models.map((m) => m.id)).toEqual(["gemma4:latest"]);
+		});
+
+		test("discoverOllamaModels strips /v1 from baseUrl when building tags URL", async () => {
+			writeRawModelsJson({ ollama: makeOllamaProvider() });
+
+			const registry = ModelRegistry.create(authStorage, modelsJsonPath);
+
+			let requestedUrl = "";
+			globalThis.fetch = vi.fn(async (url: string | URL | Request) => {
+				requestedUrl = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+				return new Response(JSON.stringify({ models: [] }), {
+					status: 200,
+					headers: { "Content-Type": "application/json" } },
+				);
+			}) as unknown as typeof fetch;
+
+			await registry.discoverOllamaModels("ollama");
+			expect(requestedUrl).toBe("http://localhost:11434/api/tags");
+		});
+
+		test("getAutoDiscoverProviders returns names of providers with autoDiscover set", () => {
+			writeRawModelsJson({
+				ollama: makeOllamaProvider(),
+				"static-only": {
+					baseUrl: "http://localhost:9999/v1",
+					api: "openai-completions",
+				},
+			});
+
+			const registry = ModelRegistry.create(authStorage, modelsJsonPath);
+			expect(registry.getAutoDiscoverProviders()).toEqual(["ollama"]);
+		});
+
+		test("refreshDiscoveredModels mutates the registry's model list", async () => {
+			writeRawModelsJson({ ollama: makeOllamaProvider() });
+
+			const registry = ModelRegistry.create(authStorage, modelsJsonPath);
+			expect(registry.getAll().filter((m) => m.provider === "ollama")).toHaveLength(0);
+
+			globalThis.fetch = vi.fn(async () => {
+				return new Response(JSON.stringify({ models: [{ name: "gemma4:latest" }] }), {
+					status: 200,
+					headers: { "Content-Type": "application/json" } },
+				);
+			}) as unknown as typeof fetch;
+
+			const added = await registry.refreshDiscoveredModels();
+			expect(added).toBe(1);
+			expect(registry.getAll().filter((m) => m.provider === "ollama")).toHaveLength(1);
+		});
+
+		test("refreshDiscoveredModels is idempotent (doesn't re-add the same model)", async () => {
+			writeRawModelsJson({ ollama: makeOllamaProvider() });
+
+			const registry = ModelRegistry.create(authStorage, modelsJsonPath);
+			globalThis.fetch = vi.fn(async () => {
+				return new Response(JSON.stringify({ models: [{ name: "gemma4:latest" }] }), {
+					status: 200,
+					headers: { "Content-Type": "application/json" } },
+				);
+			}) as unknown as typeof fetch;
+
+			const first = await registry.refreshDiscoveredModels();
+			const second = await registry.refreshDiscoveredModels();
+			expect(first).toBe(1);
+			expect(second).toBe(0);
+		});
+	});
 });

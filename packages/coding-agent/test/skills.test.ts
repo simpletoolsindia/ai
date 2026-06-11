@@ -74,14 +74,21 @@ describe("skills", () => {
 			expect(diagnostics.some((d: ResourceDiagnostic) => d.message.includes("exceeds 64 characters"))).toBe(true);
 		});
 
-		it("should warn and skip skill when description is missing", () => {
+		it("should derive description from first heading when missing", () => {
 			const { skills, diagnostics } = loadSkillsFromDir({
 				dir: join(fixturesDir, "missing-description"),
 				source: "test",
 			});
 
-			expect(skills).toHaveLength(0);
-			expect(diagnostics.some((d: ResourceDiagnostic) => d.message.includes("description is required"))).toBe(true);
+			// Skill is loaded using the first heading as the description fallback.
+			expect(skills).toHaveLength(1);
+			expect(skills[0].name).toBe("missing-description");
+			expect(skills[0].description).toBe("Missing Description");
+			expect(
+				diagnostics.some((d: ResourceDiagnostic) =>
+					d.message.includes("No 'description' in frontmatter"),
+				),
+			).toBe(true);
 		});
 
 		it("should ignore unknown frontmatter fields", () => {
@@ -94,6 +101,22 @@ describe("skills", () => {
 			expect(diagnostics).toHaveLength(0);
 		});
 
+		it("should load skills with no frontmatter at all (deriving description from heading)", () => {
+			const { skills, diagnostics } = loadSkillsFromDir({
+				dir: join(fixturesDir, "no-frontmatter"),
+				source: "test",
+			});
+
+			expect(skills).toHaveLength(1);
+			expect(skills[0].name).toBe("no-frontmatter");
+			expect(skills[0].description).toBe("No Frontmatter");
+			// Info-level diagnostic, not a warning
+			expect(
+				diagnostics.some((d: ResourceDiagnostic) =>
+					d.message.includes("No 'description' in frontmatter"),
+				),
+			).toBe(true);
+		});
 		it("should load nested skills recursively", () => {
 			const { skills, diagnostics } = loadSkillsFromDir({
 				dir: join(fixturesDir, "nested"),
@@ -115,17 +138,6 @@ describe("skills", () => {
 			expect(skills[0].name).toBe("root-skill-preferred");
 			expect(skills[0].description).toBe("Root skill should win.");
 			expect(diagnostics).toHaveLength(0);
-		});
-
-		it("should skip files without frontmatter", () => {
-			const { skills, diagnostics } = loadSkillsFromDir({
-				dir: join(fixturesDir, "no-frontmatter"),
-				source: "test",
-			});
-
-			// no-frontmatter has no description, so it should be skipped
-			expect(skills).toHaveLength(0);
-			expect(diagnostics.some((d: ResourceDiagnostic) => d.message.includes("description is required"))).toBe(true);
 		});
 
 		it("should warn and skip skill when YAML frontmatter is invalid", () => {

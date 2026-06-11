@@ -890,12 +890,15 @@ export async function main(args: string[], options?: MainOptions) {
 			})),
 		];
 
-		const modelPatterns = parsed.models ?? settingsManager.getEnabledModels();
-
 		// Run auto-discovery for any providers configured with `autoDiscover`
-		// (e.g. local Ollama) so that --model <provider>/<id> works in print
-		// mode and the model can be selected in the interactive model selector.
+		// (e.g. local Ollama) BEFORE buildSessionOptions so that
+		// --model <provider>/<id> can resolve to an auto-discovered
+		// model in print mode. (Without this, --model ollama/gemma4:e2b
+		// fails on the first invocation after a fresh config because
+		// discovery hadn't run yet.)
 		await modelRegistry.refreshDiscoveredModels();
+
+		const modelPatterns = parsed.models ?? settingsManager.getEnabledModels();
 
 		const scopedModels =
 			modelPatterns && modelPatterns.length > 0 ? await resolveModelScope(modelPatterns, modelRegistry) : [];

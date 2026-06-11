@@ -2,6 +2,20 @@
 
 > **Fork notice:** This is the changelog for **ai**, a fork of [pi](https://github.com/earendil-works/pi). Entries up to and including v0.78.1 are inherited verbatim from the upstream pi project. Starting with the first ai release, new entries are added by this fork. See [NOTICE.md](https://github.com/simpletoolsindiaorg/ai/blob/main/NOTICE.md) for the full fork attribution.
 
+## [Unreleased]
+
+### New Features
+
+- **`/searcheng` slash command** - View or update the SearXNG endpoint used by the `websearch` tool at runtime. With no argument it prints the current URL; with a URL it validates, tests, and writes the new value to `~/.ai/agent/models.json` under `providers.websearch`. No restart required. The tool was already configurable in `models.json` but the code previously used a hardcoded default; the `providers.websearch` config is now plumbed through end-to-end and supports `baseUrl`, `maxResults`, `language`, `safesearch`, `timeRange`, and `headers`.
+- **Auto-discovery runs before `--model` resolution** - `refreshDiscoveredModels` now runs at the very start of session setup, so `--model ollama/<id>` works on the first invocation with a freshly-written `models.json`. Previously, discovery ran after the CLI model was resolved, which caused a chicken-and-egg where Ollama models couldn't be selected by name on the first run.
+- **Local providers with no API key** - `optionalApiKey: true` providers (e.g. local Ollama) now get a placeholder API key at the OpenAI SDK boundary so the underlying `new OpenAI({apiKey: ""})` constructor does not throw. Ollama accepts the `Authorization: Bearer anonymous` header harmlessly; for required-auth providers the previous "No API key" error path is unchanged.
+
+### Added
+
+- `ModelRegistry.isProviderAuthOptional(provider)` and `ModelRegistry.getWebsearchConfig()` / `setWebsearchConfig()` for runtime and test introspection of the new provider options.
+- `WebsearchToolOptions` extended with `defaultLimit`, `defaultLanguage`, `defaultSafesearch`, `defaultTimeRange`, and `headers`; the `websearch` operation now always sends `Accept: application/json` and merges user headers.
+- 30 new tests across `websearch-config.test.ts` (16) and `searcheng-command.test.ts` (14), covering URL normalization, default value validation, models.json round-tripping, header merging, and the persistence path.
+
 ## [0.79.0] - 2026-06-11
 
 First public release of `ai` as a distinct project. Four major additions and several improvements.

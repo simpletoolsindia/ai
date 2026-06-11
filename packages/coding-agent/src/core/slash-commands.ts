@@ -35,6 +35,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "clone", description: "Duplicate the current session at the current position" },
 	{ name: "tree", description: "Navigate session tree (switch branches)" },
 	{ name: "trust", description: "Save project trust decision for future sessions" },
+	{
+		name: "searcheng",
+		description:
+			"Update the SearXNG endpoint used by the websearch tool. Prompts for a URL, tests it, and saves to models.json.",
+	},
 	{ name: "login", description: "Configure provider authentication" },
 	{ name: "logout", description: "Remove provider authentication" },
 	{ name: "new", description: "Start a new session" },

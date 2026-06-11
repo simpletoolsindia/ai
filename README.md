@@ -279,11 +279,24 @@ Built-in `websearch` and `webfetch` tools.
   "providers": {
     "websearch": {
       "baseUrl": "https://search.sridharhomelab.in",
-      "maxResults": 10
+      "maxResults": 10,
+      "language": "en",
+      "safesearch": "0",
+      "timeRange": "week",
+      "headers": { "X-Proxy-Auth": "token" }
     }
   }
 }
 ```
+
+To view or change the endpoint at runtime, use the built-in `/searcheng` slash command:
+
+```
+/searcheng                              # show current endpoint
+/searcheng https://search.example.com   # validate, test, and save
+```
+
+The slash command writes the new value to `models.json` and updates the in-memory registry; no restart required.
 
 `webfetch` retrieves any URL. If the response exceeds the inline cap (default 100KB), the full content is written to `~/.ai/agent/cache/webfetch/` and the LLM is told the path so it can `read` the file on demand.
 

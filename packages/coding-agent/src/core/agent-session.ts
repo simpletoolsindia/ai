@@ -375,6 +375,14 @@ export class AgentSession {
 			return { apiKey: result.apiKey, headers: result.headers };
 		}
 
+		// No API key configured. For providers that don't require one
+		// (e.g. local Ollama with `optionalApiKey: true`), return an
+		// empty auth so the request goes out unauthenticated.
+		const isOptional = this._modelRegistry.isProviderAuthOptional(model.provider);
+		if (isOptional) {
+			return { apiKey: "", headers: result.headers };
+		}
+
 		const isOAuth = this._modelRegistry.isUsingOAuth(model);
 		if (isOAuth) {
 			throw new Error(
@@ -2378,6 +2386,26 @@ export class AgentSession {
 		this.setActiveToolsByName([...new Set(nextActiveToolNames)]);
 	}
 
+	/**
+	 * Build the `websearch` tool options from the current model-registry
+	 * config. The model-registry holds the resolved `providers.websearch`
+	 * config (read from models.json). If no websearch provider is
+	 * configured, this returns `undefined` and the tool falls back to
+	 * its hardcoded default URL.
+	 */
+	private buildWebsearchToolOptions(): { searchUrl: string; defaultLimit: number; defaultLanguage: string; defaultSafesearch: "0" | "1" | "2"; defaultTimeRange?: "day" | "week" | "month" | "year"; headers?: Record<string, string> } | undefined {
+		const cfg = this._modelRegistry.getWebsearchConfig();
+		if (!cfg) return undefined;
+		return {
+			searchUrl: cfg.baseUrl,
+			defaultLimit: cfg.maxResults,
+			defaultLanguage: cfg.language,
+			defaultSafesearch: cfg.safesearch,
+			defaultTimeRange: cfg.timeRange,
+			headers: cfg.headers,
+		};
+	}
+
 	private _buildRuntime(options: {
 		activeToolNames?: string[];
 		flagValues?: Map<string, boolean | string>;
@@ -2396,6 +2424,7 @@ export class AgentSession {
 			: createAllToolDefinitions(this._cwd, {
 					read: { autoResizeImages },
 					bash: { commandPrefix: shellCommandPrefix, shellPath },
+					websearch: this.buildWebsearchToolOptions(),
 				});
 
 		this._baseToolDefinitions = new Map(

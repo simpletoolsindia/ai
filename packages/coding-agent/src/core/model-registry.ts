@@ -268,6 +268,29 @@ interface ProviderOptions {
 	baseUrl?: string;
 }
 
+/**
+ * Resolved `websearch` provider config (SearXNG endpoint, defaults).
+ *
+ * Read from `models.json` under `providers.websearch.*`. The `websearch`
+ * provider is a tool-config provider (not an LLM provider) — it has no
+ * `api`, no `models`, no `apiKey` — so it doesn't fit the model-merging
+ * pipeline. We store its resolved form here.
+ */
+export interface WebsearchProviderConfig {
+	/** SearXNG base URL. Trailing `/search` is appended if missing. */
+	baseUrl: string;
+	/** Default result count (1..20). */
+	maxResults: number;
+	/** Default language code (e.g., "en"). */
+	language: string;
+	/** Default safesearch level: "0" (none), "1" (moderate), "2" (strict). */
+	safesearch: "0" | "1" | "2";
+	/** Optional time-range filter: "day" | "week" | "month" | "year". */
+	timeRange?: "day" | "week" | "month" | "year";
+	/** Optional custom headers (e.g., for auth-proxy). */
+	headers?: Record<string, string>;
+}
+
 function migrateLegacyRegisterProviderConfigValue(providerName: string, field: string, value: string): string {
 	if (!isLegacyEnvVarNameConfigValue(value)) return value;
 	warnDeprecation(
@@ -447,6 +470,13 @@ export class ModelRegistry {
 	 */
 	private providerOptions: Map<string, ProviderOptions> = new Map();
 	/**
+	 * Resolved `websearch` provider config (SearXNG endpoint, defaults).
+	 * Stored separately from the model-registry because the websearch
+	 * tool is not an LLM provider; it doesn't fit the model-merging
+	 * pipeline. Set in `loadCustomModels`, read by `getWebsearchConfig()`.
+	 */
+	private websearchConfig: WebsearchProviderConfig | undefined;
+	/**
 	 * Cache of last successful Ollama discovery per provider, so the model
 	 * selector doesn't re-hit /api/tags on every refresh. Keyed by provider.
 	 */
@@ -479,6 +509,7 @@ export class ModelRegistry {
 		this.providerRequestConfigs.clear();
 		this.modelRequestHeaders.clear();
 		this.providerOptions.clear();
+		this.websearchConfig = undefined;
 		// Note: ollamaDiscoveryCache is NOT cleared so a transient /api/tags
 		// failure doesn't make the user lose their model list until the
 		// next successful fetch.
@@ -630,6 +661,12 @@ export class ModelRegistry {
 					});
 				}
 			}
+
+			// The websearch provider is special: it's not an LLM provider,
+			// just a bag of tool-config options (SearXNG URL, defaults).
+			// We extract it here so getWebsearchConfig() can return a
+			// typed view of the resolved values.
+			this.websearchConfig = this.resolveWebsearchConfig(config.providers.websearch);
 
 			return { models: this.parseModels(config), overrides, modelOverrides, error: undefined };
 		} catch (error) {
@@ -887,6 +924,99 @@ export class ModelRegistry {
 			if (opts.autoDiscover) out.push(name);
 		}
 		return out;
+	}
+
+	/**
+	 * Resolve the `providers.websearch` config into a typed shape.
+	 * Returns `undefined` if no websearch provider is configured (the tool
+	 * will use its hardcoded default in that case).
+	 */
+	private resolveWebsearchConfig(
+		raw: Static<typeof ProviderConfigSchema> | undefined,
+	): WebsearchProviderConfig | undefined {
+		if (!raw || !raw.baseUrl) return undefined;
+		const baseUrl = this.normalizeWebsearchUrl(raw.baseUrl);
+		const maxResultsRaw = (raw as Record<string, unknown>).maxResults;
+		const languageRaw = (raw as Record<string, unknown>).language;
+		const safesearchRaw = (raw as Record<string, unknown>).safesearch;
+		const timeRangeRaw = (raw as Record<string, unknown>).timeRange;
+		const headers = raw.headers;
+
+		const maxResults =
+			typeof maxResultsRaw === "number" && maxResultsRaw >= 1 && maxResultsRaw <= 20
+				? Math.floor(maxResultsRaw)
+				: 10;
+		const language = typeof languageRaw === "string" && /^[a-z]{2}$/i.test(languageRaw) ? languageRaw.toLowerCase() : "en";
+		const safesearch: "0" | "1" | "2" =
+			safesearchRaw === "0" || safesearchRaw === "1" || safesearchRaw === "2" ? safesearchRaw : "0";
+		const timeRange: WebsearchProviderConfig["timeRange"] =
+			timeRangeRaw === "day" ||
+			timeRangeRaw === "week" ||
+			timeRangeRaw === "month" ||
+			timeRangeRaw === "year"
+				? timeRangeRaw
+				: undefined;
+
+		return {
+			baseUrl,
+			maxResults,
+			language,
+			safesearch,
+			timeRange,
+			headers: headers && Object.keys(headers).length > 0 ? headers : undefined,
+		};
+	}
+
+	/**
+	 * Normalize a SearXNG base URL: strip trailing slash and ensure the
+	 * path ends in `/search` (SearXNG's JSON endpoint). If the user
+	 * passes a host-only URL like `https://search.example.com`, we add
+	 * `/search`. If they pass `https://search.example.com/foo/`, we
+	 * strip the trailing slash but leave the path alone (they know
+	 * what they want).
+	 */
+	private normalizeWebsearchUrl(input: string): string {
+		let url = input.trim();
+		// Strip trailing slashes
+		while (url.endsWith("/")) url = url.slice(0, -1);
+		// If the path is empty or just "/", append /search
+		const slash = url.indexOf("//");
+			if (slash !== -1) {
+				const afterScheme = url.indexOf("/", slash + 2);
+				if (afterScheme === -1) {
+					url = `${url}/search`;
+				}
+			}
+		return url;
+	}
+
+	/**
+	 * Read the resolved `providers.websearch` config. Returns
+	 * `undefined` if no websearch provider is configured in
+	 * models.json (the tool will fall back to its hardcoded default).
+	 */
+	getWebsearchConfig(): WebsearchProviderConfig | undefined {
+		return this.websearchConfig;
+	}
+
+	/**
+	 * Update the websearch config in-memory. Use this when the
+	 * models.json file is edited at runtime (e.g., by the /searcheng
+	 * slash command) and you want the next websearch call to use the
+	 * new value without forcing a full registry refresh.
+	 */
+	setWebsearchConfig(config: WebsearchProviderConfig | undefined): void {
+		this.websearchConfig = config;
+	}
+
+	/**
+	 * Returns true if the provider is configured to NOT require an API
+	 * key (i.e. `optionalApiKey: true` in models.json). Used by
+	 * callers that need to skip the "no API key configured" error and
+	 * proceed with an unauthenticated request.
+	 */
+	isProviderAuthOptional(provider: string): boolean {
+		return this.providerOptions.get(provider)?.optionalApiKey === true;
 	}
 
 	/**

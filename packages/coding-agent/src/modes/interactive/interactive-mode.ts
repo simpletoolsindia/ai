@@ -2636,6 +2636,11 @@ export class InteractiveMode {
 				this.editor.setText("");
 				return;
 			}
+			if (text === "/searcheng" || text.startsWith("/searcheng ")) {
+				void this.handleSearchengCommand(text.replace(/^\/searcheng\s*/, "").trim());
+				this.editor.setText("");
+				return;
+			}
 			if (text === "/login") {
 				this.showOAuthSelector("login");
 				this.editor.setText("");
@@ -5387,6 +5392,218 @@ export class InteractiveMode {
 		this.chatContainer.addChild(new Text(theme.fg("dim", `Session name set: ${name}`), 1, 0));
 		this.ui.requestRender();
 	}
+
+	/**
+	 * `/searcheng` [url] — view or update the SearXNG endpoint.
+	 *
+	 * No arg: show current config and a one-line prompt to type a new URL.
+	 * With arg: validate the URL, test it with a quick GET, and save to
+	 * ~/.ai/agent/models.json. The in-memory registry is updated so the
+	 * next websearch call uses the new endpoint without a session restart.
+	 */
+	private async handleSearchengCommand(arg: string): Promise<void> {
+		const current = this.session.modelRegistry.getWebsearchConfig();
+		const currentUrl = current?.baseUrl ?? null;
+		const defaultUrl = "https://search.sridharhomelab.in/search";
+
+		if (!arg) {
+			// No arg: show current and a usage hint.
+			if (currentUrl) {
+				this.showStatus(
+					`SearXNG endpoint: ${currentUrl}  (from models.json). To change: /searcheng <url>`,
+				);
+			} else {
+				this.showStatus(
+					`SearXNG endpoint: not configured in models.json (using built-in default ${defaultUrl}). To set: /searcheng <url>`,
+				);
+			}
+			this.ui.requestRender();
+			return;
+		}
+
+		// With arg: validate and test
+		const url = this.validateWebsearchUrl(arg);
+		if (!url.ok) {
+			this.showError(`/searcheng: ${url.error}`);
+			this.ui.requestRender();
+			return;
+		}
+
+		this.showStatus(`Testing ${url.normalized} ...`);
+		const test = await this.probeSearxng(url.normalized);
+		if (!test.ok) {
+			// Test failed: still allow saving but warn.
+			this.showStatus(
+				`\u26a0\ufe0f ${url.normalized} did not respond (${test.error}). Saving anyway. ` +
+					`If your SearXNG is on a private network or behind auth, this is expected.`,
+			);
+		} else {
+			this.showStatus(`\u2713 ${url.normalized} responded (HTTP ${test.status}).`);
+		}
+
+		const writeResult = await this.writeSearxngToModelsJson(url.normalized);
+		if (!writeResult.ok) {
+			this.showError(`/searcheng: failed to write models.json: ${writeResult.error}`);
+			this.ui.requestRender();
+			return;
+		}
+
+		// Update in-memory so the next websearch call uses the new value.
+		this.session.modelRegistry.setWebsearchConfig({
+			baseUrl: url.normalized,
+			maxResults: writeResult.maxResults ?? current?.maxResults ?? 10,
+			language: writeResult.language ?? current?.language ?? "en",
+			safesearch: writeResult.safesearch ?? current?.safesearch ?? "0",
+			timeRange: writeResult.timeRange ?? current?.timeRange,
+			headers: writeResult.headers ?? current?.headers,
+		});
+
+		this.showStatus(
+			`Saved SearXNG endpoint: ${url.normalized}. The next websearch call will use it.`,
+		);
+		this.ui.requestRender();
+	}
+
+	/**
+	 * Validate a URL the user typed for /searcheng. Returns either
+	 * `{ ok: true, normalized }` or `{ ok: false, error }`.
+	 */
+	private validateWebsearchUrl(input: string):
+		| { ok: true; normalized: string }
+		| { ok: false; error: string } {
+		const trimmed = input.trim();
+		if (!trimmed) return { ok: false, error: "URL is empty" };
+		let parsed: URL;
+		try {
+			parsed = new URL(trimmed);
+		} catch {
+			return { ok: false, error: "not a valid URL (need scheme like https://)" };
+		}
+		if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+			return { ok: false, error: `unsupported protocol "${parsed.protocol}" (use http:// or https://)` };
+		}
+		// Reject obvious mistakes
+		if (parsed.hostname === "localhost" && !parsed.port) {
+			return {
+				ok: false,
+				error: 'refusing to save "localhost" without an explicit port. Use http://localhost:<port>/search',
+			};
+		}
+		// Normalize: strip trailing slashes; if no path, add /search.
+		let path = parsed.pathname.replace(/\/+$/, "");
+		if (!path) path = "/search";
+		// Use hostname (no port) + port separately so we don't double-print
+		// the port when it's already in `host` (URL.host includes the port).
+		const portPart = parsed.port ? `:${parsed.port}` : "";
+		return {
+			ok: true,
+			normalized: `${parsed.protocol}//${parsed.hostname}${portPart}${path}`,
+		};
+	}
+
+	/**
+	 * Lightweight connectivity check for a SearXNG endpoint. We do a
+	 * `GET <url>?q=ping&format=json` with a 5-second timeout. Returns
+	 * `{ ok: true, status }` on HTTP 2xx/3xx, `{ ok: false, error }`
+	 * otherwise. We do NOT fail the save on a probe failure (the user
+	 * may be intentionally setting an offline / behind-auth URL).
+	 */
+	private async probeSearxng(
+		url: string,
+	): Promise<{ ok: true; status: number } | { ok: false; error: string }> {
+		const controller = new AbortController();
+		const timer = setTimeout(() => controller.abort(new Error("probe timed out")), 5000);
+		try {
+			const sep = url.includes("?") ? "&" : "?";
+			const probeUrl = `${url}${sep}q=ping&format=json`;
+			const res = await fetch(probeUrl, {
+				method: "GET",
+				signal: controller.signal,
+				headers: { Accept: "application/json", "User-Agent": "ai-searcheng-probe/1.0" },
+			});
+			if (res.ok || (res.status >= 300 && res.status < 400)) {
+				return { ok: true, status: res.status };
+			}
+			return { ok: false, error: `HTTP ${res.status} ${res.statusText || ""}`.trim() };
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			return { ok: false, error: msg };
+		} finally {
+			clearTimeout(timer);
+		}
+	}
+
+	/**
+	 * Write the new SearXNG URL into `~/.ai/agent/models.json` under
+	 * `providers.websearch.baseUrl`, preserving any existing fields
+	 * (maxResults, language, safesearch, headers) unless the user
+	 * explicitly cleared them. Returns the resolved config so the
+	 * caller can update the in-memory registry.
+	 */
+	private async writeSearxngToModelsJson(
+		baseUrl: string,
+	): Promise<
+		| {
+				ok: true;
+				maxResults?: number;
+				language?: string;
+				safesearch?: "0" | "1" | "2";
+				timeRange?: "day" | "week" | "month" | "year";
+				headers?: Record<string, string>;
+		  }
+		| { ok: false; error: string }
+	> {
+		try {
+			const { readFileSync, writeFileSync, mkdirSync } = await import("node:fs");
+			const { join } = await import("node:path");
+			const modelsPath = join(this.runtimeHost.services.agentDir, "models.json");
+			let existing: { providers?: Record<string, Record<string, unknown>> } = {};
+			try {
+				existing = JSON.parse(readFileSync(modelsPath, "utf-8"));
+			} catch {
+				// File missing or invalid; we'll create a fresh one.
+			}
+			const providers = existing.providers ?? {};
+			const previousWebsearch = (providers.websearch ?? {}) as Record<string, unknown>;
+			const updatedWebsearch: Record<string, unknown> = {
+				...previousWebsearch,
+				baseUrl,
+			};
+			providers.websearch = updatedWebsearch;
+			existing.providers = providers;
+			mkdirSync(this.runtimeHost.services.agentDir, { recursive: true });
+			writeFileSync(modelsPath, JSON.stringify(existing, null, 2) + "\n", "utf-8");
+
+			// Best-effort type narrowing for the resolved config
+			const maxResultsRaw = updatedWebsearch.maxResults;
+			const languageRaw = updatedWebsearch.language;
+			const safesearchRaw = updatedWebsearch.safesearch;
+			const timeRangeRaw = updatedWebsearch.timeRange;
+			const headersRaw = updatedWebsearch.headers;
+			return {
+				ok: true,
+				maxResults: typeof maxResultsRaw === "number" ? maxResultsRaw : undefined,
+				language: typeof languageRaw === "string" ? languageRaw : undefined,
+				safesearch: safesearchRaw === "0" || safesearchRaw === "1" || safesearchRaw === "2"
+					? safesearchRaw
+					: undefined,
+				timeRange:
+					timeRangeRaw === "day" ||
+					timeRangeRaw === "week" ||
+					timeRangeRaw === "month" ||
+					timeRangeRaw === "year"
+						? timeRangeRaw
+						: undefined,
+				headers:
+					headersRaw && typeof headersRaw === "object" && Object.keys(headersRaw).length > 0
+						? (headersRaw as Record<string, string>)
+						: undefined,
+			};
+		} catch (err) {
+			return { ok: false, error: err instanceof Error ? err.message : String(err) };
+		}
+	}
+
 
 	private handleSessionCommand(): void {
 		const stats = this.session.getSessionStats();

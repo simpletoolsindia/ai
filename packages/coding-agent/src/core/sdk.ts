@@ -317,6 +317,15 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			if (!auth.ok) {
 				throw new Error(auth.error);
 			}
+			// The ai-package's openai-completions stream throws when
+			// `apiKey` is empty (it constructs `new OpenAI({apiKey: ""})`,
+			// which the OpenAI SDK rejects). For providers that don't
+			// require auth (`optionalApiKey: true`, e.g. local Ollama
+			// or vLLM), substitute a non-empty placeholder. The baseUrl
+			// is local; the placeholder is sent in `Authorization:
+			// Bearer <placeholder>` which the local server ignores.
+			const isOptionalAuth = modelRegistry.isProviderAuthOptional(model.provider);
+			const effectiveApiKey = auth.apiKey ?? (isOptionalAuth ? "anonymous" : undefined);
 			const providerRetrySettings = settingsManager.getProviderRetrySettings();
 			const httpIdleTimeoutMs = settingsManager.getHttpIdleTimeoutMs();
 			// SDKs treat timeout=0 as 0ms (immediate timeout), not "no timeout".
@@ -327,7 +336,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				options?.websocketConnectTimeoutMs ?? settingsManager.getWebSocketConnectTimeoutMs();
 			return streamSimple(model, context, {
 				...options,
-				apiKey: auth.apiKey,
+				apiKey: effectiveApiKey,
 				timeoutMs,
 				websocketConnectTimeoutMs,
 				maxRetries: options?.maxRetries ?? providerRetrySettings.maxRetries,

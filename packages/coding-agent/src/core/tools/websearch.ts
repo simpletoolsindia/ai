@@ -128,7 +128,7 @@ export interface WebsearchToolDetails {
 export interface WebsearchOperations {
 	fetch: (
 		url: string,
-		options: { signal: AbortSignal },
+		options: { signal: AbortSignal; headers?: Record<string, string> },
 	) => Promise<{
 		ok: boolean;
 		status: number;
@@ -219,7 +219,21 @@ function buildSearxngUrl(
 }
 
 export interface WebsearchToolOptions {
+	/**
+	 * SearXNG base URL. Trailing slash and `/search` suffix are normalized
+	 * by the caller (ModelRegistry), so this is the resolved, final URL.
+	 */
 	searchUrl?: string;
+	/** Default result count when the LLM doesn't specify `limit`. */
+	defaultLimit?: number;
+	/** Default language code when the LLM doesn't specify `language`. */
+	defaultLanguage?: string;
+	/** Default safe-search level: "0" (none), "1" (moderate), "2" (strict). */
+	defaultSafesearch?: "0" | "1" | "2";
+	/** Default time-range filter. */
+	defaultTimeRange?: "day" | "week" | "month" | "year";
+	/** Optional custom headers (e.g., for an auth proxy in front of SearXNG). */
+	headers?: Record<string, string>;
 	operations?: WebsearchOperations;
 }
 
@@ -229,6 +243,10 @@ export function createWebsearchToolDefinition(
 ): ToolDefinition<typeof websearchSchema, WebsearchToolDetails | undefined> {
 	const ops = options?.operations ?? defaultOperations;
 	const searchUrl = options?.searchUrl ?? DEFAULT_SEARCH_URL;
+	const defaultLimit = options?.defaultLimit ?? DEFAULT_RESULT_LIMIT;
+	const defaultLanguage = options?.defaultLanguage ?? "en";
+	const defaultSafesearch = options?.defaultSafesearch ?? "0";
+	const defaultTimeRange = options?.defaultTimeRange;
 
 	return {
 		name: "websearch",
@@ -259,17 +277,17 @@ export function createWebsearchToolDefinition(
 				throw new Error("Missing required argument: query");
 			}
 
-			const limit = Math.min(MAX_RESULT_LIMIT, Math.max(1, p.limit ?? DEFAULT_RESULT_LIMIT));
+			const limit = Math.min(MAX_RESULT_LIMIT, Math.max(1, p.limit ?? defaultLimit));
 			const categories = parseCsv(p.categories, ALLOWED_CATEGORIES) ?? "general";
-			const language = p.language === undefined ? "en" : String(p.language).toLowerCase();
+			const language = p.language === undefined ? defaultLanguage : String(p.language).toLowerCase();
 			if (!ALLOWED_LANGUAGES.has(language)) {
 				throw new Error(`Unsupported language "${language}". Allowed: ${Array.from(ALLOWED_LANGUAGES).join(", ")}`);
 			}
-			const safesearch = p.safesearch === undefined ? "0" : String(p.safesearch);
+			const safesearch = p.safesearch === undefined ? defaultSafesearch : String(p.safesearch);
 			if (!ALLOWED_SAFESEARCH.has(safesearch)) {
 				throw new Error(`safesearch must be "0", "1", or "2", got "${p.safesearch}"`);
 			}
-			const timeRange = p.timeRange === undefined ? "" : String(p.timeRange);
+			const timeRange = p.timeRange === undefined ? (defaultTimeRange ?? "") : String(p.timeRange);
 			if (!ALLOWED_TIME_RANGE.has(timeRange)) {
 				throw new Error(`timeRange must be one of: day, week, month, year`);
 			}
@@ -300,7 +318,14 @@ export function createWebsearchToolDefinition(
 			let timedOut = false;
 			let callerAborted = false;
 			try {
-				response = await ops.fetch(fullUrl, { signal: timeoutController.signal });
+				const requestHeaders: Record<string, string> = { Accept: "application/json" };
+				if (options?.headers) {
+					Object.assign(requestHeaders, options.headers);
+				}
+				response = await ops.fetch(fullUrl, {
+					signal: timeoutController.signal,
+					headers: requestHeaders,
+				});
 			} catch (err) {
 				clearTimeout(timeoutId);
 				if (signal) signal.removeEventListener("abort", onCallerAbort);

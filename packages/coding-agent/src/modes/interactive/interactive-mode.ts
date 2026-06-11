@@ -3024,6 +3024,10 @@ export class InteractiveMode {
 				component.markExecutionStarted();
 				// The tool is actually running now (not just being prepared).
 				this.setDynamicWorkingMessage("executing");
+				// Update footer with current tool info
+				this.footerDataProvider.setCurrentTool(event.toolName);
+				this.footerDataProvider.setCurrentProcess("executing");
+				this.footer.invalidate();
 				this.ui.requestRender();
 				break;
 			}
@@ -3045,6 +3049,10 @@ export class InteractiveMode {
 					// Tool is done; the model will receive the result and
 					// continue. Show "Working..." to reflect that.
 					this.setDynamicWorkingMessage("working");
+					// Clear tool status from footer
+					this.footerDataProvider.setCurrentTool(null);
+					this.footerDataProvider.setCurrentProcess(null);
+					this.footer.invalidate();
 					this.ui.requestRender();
 				}
 				break;

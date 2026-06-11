@@ -73,6 +73,16 @@ export interface VerificationSettings {
 	model?: string;
 }
 
+/** Settings for turn-level timeouts to prevent endless loops. */
+export interface TimeoutSettings {
+	/** Maximum time per agent turn in seconds. Default: 120. */
+	turnTimeoutSeconds?: number;
+	/** Whether to enable turn timeouts. Default: true. */
+	enabled?: boolean;
+	/** Max retries with increased timeout before giving up. Default: 3. */
+	maxRetries?: number;
+}
+
 export type TransportSetting = Transport;
 
 /**
@@ -136,6 +146,8 @@ export interface Settings {
 	warnings?: WarningSettings;
 	/** Verification loop — runs a verification LLM after agent_end to check correctness. */
 	verification?: VerificationSettings;
+	/** Turn-level timeouts to prevent endless loops. */
+	timeout?: TimeoutSettings;
 	sessionDir?: string; // Custom session storage directory (same format as --session-dir CLI flag)
 	httpIdleTimeoutMs?: number; // HTTP header/body idle timeout in milliseconds; 0 disables it
 	websocketConnectTimeoutMs?: number; // WebSocket connect/open handshake timeout in milliseconds; 0 disables it
@@ -1228,6 +1240,16 @@ export class SettingsManager {
 			enabled: v.enabled ?? true,
 			maxLoops: v.maxLoops ?? 3,
 			model: v.model,
+		};
+	}
+
+	/** Get timeout settings with defaults applied. */
+	getTimeoutSettings(): { enabled: boolean; turnTimeoutMs: number; maxRetries: number } {
+		const t = this.settings.timeout ?? {};
+		return {
+			enabled: t.enabled ?? true,
+			turnTimeoutMs: (t.turnTimeoutSeconds ?? 120) * 1000,
+			maxRetries: t.maxRetries ?? 3,
 		};
 	}
 

@@ -113,6 +113,10 @@ export class FooterDataProvider {
 	private availableProviderCount = 0;
 	/** Names of skills the agent has loaded (via read) in this session. */
 	private loadedSkills: string[] = [];
+	/** Current tool being executed by the agent (shown in footer). */
+	private currentToolName: string | null = null;
+	/** Current process description (shown in footer). */
+	private currentProcess: string | null = null;
 	private refreshTimer: ReturnType<typeof setTimeout> | null = null;
 	private gitWatcherRetryTimer: ReturnType<typeof setTimeout> | null = null;
 	private refreshInFlight = false;
@@ -133,6 +137,26 @@ export class FooterDataProvider {
 	/** Get the currently loaded skill names. */
 	getLoadedSkills(): string[] {
 		return this.loadedSkills;
+	}
+
+	/** Set the currently executing tool name (null = idle). */
+	setCurrentTool(name: string | null): void {
+		this.currentToolName = name;
+	}
+
+	/** Get the currently executing tool name. */
+	getCurrentTool(): string | null {
+		return this.currentToolName;
+	}
+
+	/** Set the current process description (null = idle). */
+	setCurrentProcess(process: string | null): void {
+		this.currentProcess = process;
+	}
+
+	/** Get the current process description. */
+	getCurrentProcess(): string | null {
+		return this.currentProcess;
 	}
 
 	/** Current git branch, null if not in repo, "detached" if detached HEAD */
@@ -396,5 +420,5 @@ export class FooterDataProvider {
 /** Read-only view for extensions - excludes setExtensionStatus, setAvailableProviderCount and dispose */
 export type ReadonlyFooterDataProvider = Pick<
 	FooterDataProvider,
-	"getGitBranch" | "getExtensionStatuses" | "getAvailableProviderCount" | "onBranchChange"
+	"getGitBranch" | "getExtensionStatuses" | "getAvailableProviderCount" | "getCurrentTool" | "getCurrentProcess" | "onBranchChange"
 >;

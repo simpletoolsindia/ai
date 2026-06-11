@@ -236,6 +236,14 @@ export class FooterComponent implements Component {
 		const pwdLine = truncateToWidth(theme.fg("dim", pwd), width, theme.fg("dim", "..."));
 		const lines = [pwdLine, dimStatsLeft + dimRemainder];
 
+		// Tool status indicator: shows which tool the agent is running
+		const currentTool = this.footerData.getCurrentTool();
+		if (currentTool) {
+			const process = this.footerData.getCurrentProcess() ?? "running";
+			const toolLine = theme.fg("warning", `\u26A1 ${currentTool} \u2192 ${process}`);
+			lines.push(truncateToWidth(toolLine, width, theme.fg("dim", "...")));
+		}
+
 		// Add extension statuses on a single line, sorted by key alphabetically
 		const extensionStatuses = this.footerData.getExtensionStatuses();
 		if (extensionStatuses.size > 0) {

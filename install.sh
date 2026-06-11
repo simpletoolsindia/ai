@@ -295,6 +295,19 @@ else
 fi
 success "Dependencies installed"
 
+# better-sqlite3 is a native module that needs a per-platform build,
+# which --ignore-scripts skips. Rebuild it explicitly so the hermes
+# memory extension and any other consumer of sqlite can actually load.
+if [ -d "$SOURCE_DIR/node_modules/better-sqlite3" ] || [ -d "$SOURCE_DIR/packages/coding-agent/node_modules/better-sqlite3" ]; then
+	info "Building better-sqlite3 native binding (per-platform)"
+	if [ "$DRY_RUN" -eq 1 ]; then
+		echo "  [dry-run] npm rebuild better-sqlite3"
+	else
+		run npm rebuild better-sqlite3 --no-audit --no-fund || \
+			die "Failed to build better-sqlite3. Try: npm install -g node-gyp && re-run."
+	fi
+fi
+
 # ---------------------------------------------------------------------------
 # Step 4: Build
 # ---------------------------------------------------------------------------

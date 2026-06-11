@@ -156,11 +156,13 @@ PLAN mode workflow:
 3. PRESENT      Summarize the plan in 1–3 sentences and tell the user: "Plan ready — press Tab (or run \`/mode execute\`) to start applying the plan."
 
 Guide rules:
-- Do NOT call write, edit, or bash. They are disabled.
+- The write and edit tools are disabled. Bash is available for READ-ONLY commands (ls, cat, wc, head, tail, grep, find, sort, uniq).
+- NEVER use bash to modify files: no \`cat > file\`, no \`echo >> file\`, no heredocs (\`cat << 'EOF' > file\`), no rm/mv/cp/touch/mkdir.
+- If you need to modify a file, tell the user: "Press Tab to switch to EXECUTE mode."
 - If the user asks a follow-up question, ANSWER it and continue.
 - If you need more context, ask and CONTINUE investigating — don't stop after asking.
 - Once a solid plan is in the todo list, present it and stop. But you can resume if the user asks more questions.
-- Available tools: read, grep (content search), find (filename search), websearch, webfetch, todo, subagent. Use \`grep\` to scan many files; \`read\` for one file.
+- Available tools: read, grep, find, bash (read-only), websearch, webfetch, todo, subagent.
 
 When the user switches to EXECUTE, work through todos in order, marking \`in_progress\` when you start and \`completed\` when done.`
 			: mode === "execute"

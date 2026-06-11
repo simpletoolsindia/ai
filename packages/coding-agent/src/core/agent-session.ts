@@ -291,6 +291,27 @@ export class AgentSession {
 
 	// Bash execution state
 	private _bashAbortController: AbortController | undefined = undefined;
+
+	/**
+	 * Check if a bash command would modify files. Returns the reason
+	 * string if destructive, or null if safe to run in PLAN mode.
+	 */
+	private _isDestructiveBashCommand(command: string): string | null {
+		const c = command.trim();
+		// Heredoc that writes to a file: cat > file << EOF
+		if (/cat\s+>\s*\S+\s*<</.test(c)) return "heredoc file write";
+		// Output redirection: cat/echo/printf > file or >> file
+		if (/(?:^|\||;|&)\s*(?:cat|echo|printf|tee)\s.*[>]/.test(c)) return "output redirection";
+		// Write to a file path
+		if (/\s>\s*[/~]/.test(c)) return "file redirect";
+		// File-modifying commands
+		if (/(?:^|\||;|&)\s*(?:dd|cp|mv|rm|touch|mkdir|chmod|chown|ln|sed\s.*-i|sed\s.*--in-place)\s/.test(c)) return "file modification";
+		// npm/yarn/pip etc install (can modify files)
+		if (/(?:^|\||;|&)\s*(?:npm|yarn|pnpm|pip|pip3|gem|cargo)\s+(?:install|add|remove|uninstall|update|upgrade)\b/.test(c)) return "package install";
+		return null;
+	}
+
+	// Bash execution state
 	private _pendingBashMessages: BashExecutionMessage[] = [];
 
 	// Extension system
@@ -2679,6 +2700,19 @@ export class AgentSession {
 		onChunk?: (chunk: string) => void,
 		options?: { excludeFromContext?: boolean; operations?: BashOperations },
 	): Promise<BashResult> {
+		// In PLAN mode, block commands that modify files
+		if (this.settingsManager.getAgentMode() === "plan") {
+			const blocked = this._isDestructiveBashCommand(command);
+			if (blocked) {
+				return {
+					exitCode: 1,
+					output: `PLAN MODE: This command would modify files (${blocked}). Switch to EXECUTE mode (Tab or /mode execute) to run it.`,
+					cancelled: false,
+					truncated: false,
+				};
+			}
+		}
+
 		this._bashAbortController = new AbortController();
 
 		// Apply command prefix if configured (e.g., "shopt -s expand_aliases" for alias support)

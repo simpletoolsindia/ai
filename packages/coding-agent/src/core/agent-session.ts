@@ -939,6 +939,7 @@ export class AgentSession {
 			selectedTools: validToolNames,
 			toolSnippets,
 			promptGuidelines,
+			mode: this.settingsManager.getAgentMode(),
 		};
 		return buildSystemPrompt(this._baseSystemPromptOptions);
 	}
@@ -2075,6 +2076,58 @@ export class AgentSession {
 	/** Whether auto-compaction is enabled */
 	get autoCompactionEnabled(): boolean {
 		return this.settingsManager.getCompactionEnabled();
+	}
+
+	/**
+	 * Current agent mode: "plan" (read-only) or "execute" (full tool set).
+	 * Persisted to settings.json via the SettingsManager.
+	 */
+	getMode(): "plan" | "execute" {
+		return this.settingsManager.getAgentMode();
+	}
+
+	/**
+	 * Set the agent mode. When entering "plan", write tools
+	 * (`write`, `edit`, `bash`) are stripped from the active tool
+	 * set so the model cannot mutate files. The system prompt is
+	 * rebuilt to include a one-line note explaining the mode.
+	 *
+	 * Returns the resolved list of tool names that are still active
+	 * after the mode change.
+	 */
+	setMode(mode: "plan" | "execute"): string[] {
+		const previous = this.settingsManager.getAgentMode();
+		if (previous === mode) {
+			return this.getActiveToolNames();
+		}
+		this.settingsManager.setAgentMode(mode);
+
+		// Re-derive the active tool list: take the current set and, in
+		// PLAN mode, drop the mutating tools. Keep read-only ones
+		// (read, grep, find, ls, websearch, webfetch, todo, subagent).
+		const current = this.getActiveToolNames();
+		let next: string[];
+		if (mode === "plan") {
+			const MUTATING = new Set(["write", "edit", "bash"]);
+			next = current.filter((n) => !MUTATING.has(n));
+		} else {
+			// Executing: add the missing mutating tools back if they
+			// were in the original defaults and still allowed.
+			const desired = new Set(current);
+			for (const t of ["write", "edit", "bash"]) {
+				if (
+					!desired.has(t) &&
+					(!this._allowedToolNames || this._allowedToolNames.has(t)) &&
+					!this._excludedToolNames?.has(t)
+				) {
+					desired.add(t);
+				}
+			}
+			next = Array.from(desired);
+		}
+
+		this.setActiveToolsByName(next);
+		return this.getActiveToolNames();
 	}
 
 	async bindExtensions(bindings: ExtensionBindings): Promise<void> {

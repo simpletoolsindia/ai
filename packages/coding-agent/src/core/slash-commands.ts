@@ -44,6 +44,10 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "logout", description: "Remove provider authentication" },
 	{ name: "new", description: "Start a new session" },
 	{ name: "compact", description: "Manually compact the session context" },
+	{
+		name: "mode",
+		description: "Switch the agent between PLAN (read-only) and EXECUTE (full tools) modes",
+	},
 	{ name: "resume", description: "Resume a different session" },
 	{
 		name: "subagent",

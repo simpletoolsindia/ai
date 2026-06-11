@@ -127,6 +127,16 @@ export class FooterComponent implements Component {
 			pwd = `${pwd} • ${sessionName}`;
 		}
 
+		// Agent mode badge: PLAN in warning color (muted action), EXECUTE
+		// in dim (so it doesn't dominate the footer). The badge goes on
+		// the cwd/branch line so it's always visible.
+		const mode = this.session.getMode();
+		const modeBadge =
+			mode === "plan"
+				? theme.fg("warning", "PLAN")
+				: theme.fg("dim", "EXECUTE");
+		pwd = `${pwd} \u2502 ${modeBadge}`;
+
 		// Build stats line
 		const statsParts = [];
 		if (totalInput) statsParts.push(`↑${formatTokens(totalInput)}`);

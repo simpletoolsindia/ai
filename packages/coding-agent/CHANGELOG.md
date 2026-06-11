@@ -2,6 +2,40 @@
 
 > **Fork notice:** This is the changelog for **ai**, a fork of [pi](https://github.com/earendil-works/pi). Entries up to and including v0.78.1 are inherited verbatim from the upstream pi project. Starting with the first ai release, new entries are added by this fork. See [NOTICE.md](https://github.com/simpletoolsindiaorg/ai/blob/main/NOTICE.md) for the full fork attribution.
 
+## [0.79.4] - 2026-06-11
+
+The final production build. Two new features for safe, visible control over the agent.
+
+### New Features
+
+- **PLAN / EXECUTE modes** — switch the agent between a read-only "planning" mode and the default "execute" mode. In PLAN mode, `write`, `edit`, and `bash` are stripped from the active tool set; the system prompt gets a one-line note explaining that the model can only read, search, and propose a plan. New `/mode` slash command with sub-args `plan` / `execute` / `toggle`. Mode is persisted to `~/.ai/agent/settings.json: { "agentMode": "plan" | "execute" }`.
+- **Mode badge in the footer** — the status bar always shows the current mode next to the cwd/branch line: `PLAN` (warning color) or `EXECUTE` (dim). You'll never be surprised by which tools the model can use.
+
+### Added
+
+- `SettingsManager.getAgentMode()` / `setAgentMode(mode)`
+- `AgentSession.getMode()` / `setMode(mode)` — re-filters the active tool set on change
+- `buildSystemPrompt({ mode: "plan" | "execute" })` — injects the PLAN-mode hint into the system prompt
+- `/mode` slash command + `handleModeCommand()` in `interactive-mode.ts`
+- 9 tests in `test/agent-mode.test.ts` (persistence round-trip, system-prompt hint, slash-command wiring, footer wiring)
+
+## [0.79.3] - 2026-06-11
+
+Polish release focused on perceived responsiveness.
+
+### New Features
+
+- **Dynamic working-message state machine** — the spinner next to the working indicator no longer just says "Working...". It cycles through 5 phase labels as the agent turn progresses:
+  | Phase | When | Message |
+  |---|---|---|
+  | 1 | `agent_start` | `Thinking...` |
+  | 2 | Assistant `message_start` | `Working...` |
+  | 3 | First `toolCall` in `message_update` | `Tool calling...` |
+  | 4 | `tool_execution_start` | `Executing task...` |
+  | 5 | `message_end` with `stopReason = "stop"` | `Almost done...` |
+  Extensions can still override the message via `setWorkingMessage()`; the new `dynamicWorkingMessage` falls back to the default after that.
+- 3 regression tests in `test/dynamic-working-messages.test.ts` guard the phase→event wiring.
+
 ## [0.79.2] - 2026-06-11
 
 The final production build. Adds runtime provider onboarding, percentage-based auto-compaction, and a tighter system prompt.

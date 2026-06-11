@@ -290,6 +290,24 @@ export class InteractiveMode {
 	private workingVisible = true;
 	private workingIndicatorOptions: LoaderIndicatorOptions | undefined = undefined;
 	private readonly defaultWorkingMessage = "Working...";
+	/**
+	 * Phases of the agent loop, mapped to short, human-readable status
+	 * messages shown next to the spinner. These update as the LLM
+	 * transitions between thinking, generating text, calling tools, and
+	 * wrapping up — giving the user a clear sense of what the model is
+	 * doing during long turns.
+	 *
+	 * Set via `setDynamicWorkingMessage()` and overridden by any
+	 * extension or `setWorkingMessage()` call.
+	 */
+	private readonly dynamicWorkingMessages = {
+		thinking: "Thinking...",
+		working: "Working...",
+		toolCalling: "Tool calling...",
+		executing: "Executing task...",
+		almostDone: "Almost done...",
+	} as const;
+	private dynamicWorkingMessage: string | undefined = undefined;
 	private readonly defaultHiddenThinkingLabel = "Thinking...";
 	private hiddenThinkingLabel = this.defaultHiddenThinkingLabel;
 
@@ -1752,7 +1770,30 @@ export class InteractiveMode {
 	}
 
 	private getWorkingLoaderMessage(): string {
-		return this.workingMessage ?? this.defaultWorkingMessage;
+		return (
+			this.workingMessage ??
+			this.dynamicWorkingMessage ??
+			this.defaultWorkingMessage
+		);
+	}
+
+	/**
+	 * Update the working spinner message to one of the dynamic phase
+	 * labels. The message sticks until the next call. Extensions can
+	 * still override via `setWorkingMessage()`.
+	 */
+	private setDynamicWorkingMessage(phase: keyof typeof this.dynamicWorkingMessages): void {
+		this.dynamicWorkingMessage = this.dynamicWorkingMessages[phase];
+		if (this.loadingAnimation) {
+			this.loadingAnimation.setMessage(
+				`${this.dynamicWorkingMessage} (${keyText("app.interrupt")} to interrupt)`,
+			);
+		}
+	}
+
+	/** Clear the dynamic override and fall back to the default message. */
+	private clearDynamicWorkingMessage(): void {
+		this.dynamicWorkingMessage = undefined;
 	}
 
 	private createWorkingLoader(): Loader {
@@ -2662,6 +2703,12 @@ export class InteractiveMode {
 				await this.handleCompactCommand(customInstructions);
 				return;
 			}
+			if (text === "/mode" || text.startsWith("/mode ")) {
+				const arg = text === "/mode" ? "" : text.replace(/^\/mode\s*/, "").trim().toLowerCase();
+				this.editor.setText("");
+				this.handleModeCommand(arg);
+				return;
+			}
 			if (text === "/reload") {
 				this.editor.setText("");
 				await this.handleReloadCommand();
@@ -2784,6 +2831,9 @@ export class InteractiveMode {
 				if (this.workingVisible) {
 					this.loadingAnimation = this.createWorkingLoader();
 					this.statusContainer.addChild(this.loadingAnimation);
+					// Fresh turn starts here. The model is about to receive the
+					// request and start reasoning. Show "Thinking...".
+					this.setDynamicWorkingMessage("thinking");
 				}
 				this.ui.requestRender();
 				break;
@@ -2822,6 +2872,8 @@ export class InteractiveMode {
 					this.streamingMessage = event.message;
 					this.chatContainer.addChild(this.streamingComponent);
 					this.streamingComponent.updateContent(this.streamingMessage);
+					// The model is now actively streaming its response.
+					this.setDynamicWorkingMessage("working");
 					this.ui.requestRender();
 				}
 				break;
@@ -2831,9 +2883,11 @@ export class InteractiveMode {
 					this.streamingMessage = event.message;
 					this.streamingComponent.updateContent(this.streamingMessage);
 
+					let hasNewToolCall = false;
 					for (const content of this.streamingMessage.content) {
 						if (content.type === "toolCall") {
 							if (!this.pendingTools.has(content.id)) {
+								hasNewToolCall = true;
 								const component = new ToolExecutionComponent(
 									content.name,
 									content.id,
@@ -2856,6 +2910,12 @@ export class InteractiveMode {
 								}
 							}
 						}
+					}
+					// A brand-new tool call just appeared in the stream.
+					// Update the spinner so the user knows we're moving
+					// from "generating text" to "preparing tool call".
+					if (hasNewToolCall) {
+						this.setDynamicWorkingMessage("toolCalling");
 					}
 					this.ui.requestRender();
 				}
@@ -2888,6 +2948,10 @@ export class InteractiveMode {
 						}
 						this.pendingTools.clear();
 					} else {
+						// Final assistant message with stopReason === "stop" (or
+						// "end_turn"). The model is wrapping up — show "Almost done..."
+						// briefly before the loader is torn down.
+						this.setDynamicWorkingMessage("almostDone");
 						// Args are now complete - trigger diff computation for edit tools
 						for (const [, component] of this.pendingTools.entries()) {
 							component.setArgsComplete();
@@ -2920,6 +2984,8 @@ export class InteractiveMode {
 					this.pendingTools.set(event.toolCallId, component);
 				}
 				component.markExecutionStarted();
+				// The tool is actually running now (not just being prepared).
+				this.setDynamicWorkingMessage("executing");
 				this.ui.requestRender();
 				break;
 			}
@@ -2938,6 +3004,9 @@ export class InteractiveMode {
 				if (component) {
 					component.updateResult({ ...event.result, isError: event.isError });
 					this.pendingTools.delete(event.toolCallId);
+					// Tool is done; the model will receive the result and
+					// continue. Show "Working..." to reflect that.
+					this.setDynamicWorkingMessage("working");
 					this.ui.requestRender();
 				}
 				break;
@@ -6113,6 +6182,65 @@ export class InteractiveMode {
 		} catch {
 			// Ignore, will be emitted as an event
 		}
+	}
+
+	/**
+	 * `/mode` [plan|execute|toggle]
+	 *
+	 * Switch the agent between PLAN (read-only) and EXECUTE (full tools)
+	 * modes. With no argument it prints the current mode. The new mode
+	 * is persisted to `settings.json` and the active tool set is
+	 * refiltered immediately (write tools are removed in plan, restored
+	 * in execute). The footer updates to show the new mode.
+	 */
+	private handleModeCommand(arg: string): void {
+		const current = this.session.getMode();
+		let next: "plan" | "execute" | null = null;
+
+		if (!arg) {
+			// No arg: show current mode and the help line.
+			this.showStatus(
+				`Agent mode: ${current.toUpperCase()}. ` +
+					`Use \`/mode plan\` or \`/mode execute\` to switch, or \`/mode toggle\` to flip.`,
+			);
+			this.ui.requestRender();
+			return;
+		}
+
+		if (arg === "plan" || arg === "p" || arg === "read-only" || arg === "readonly") {
+			next = "plan";
+		} else if (arg === "execute" || arg === "exec" || arg === "e" || arg === "run") {
+			next = "execute";
+		} else if (arg === "toggle" || arg === "t" || arg === "switch" || arg === "flip") {
+			next = current === "plan" ? "execute" : "plan";
+		} else {
+			this.showError(
+				`/mode: unknown argument "${arg}". Use \`/mode\`, \`/mode plan\`, \`/mode execute\`, or \`/mode toggle\`.`,
+			);
+			this.ui.requestRender();
+			return;
+		}
+
+		if (next === current) {
+			this.showStatus(`Agent mode is already ${current.toUpperCase()}.`);
+			this.ui.requestRender();
+			return;
+		}
+
+		const active = this.session.setMode(next);
+		const removed = next === "plan" ? "write, edit, bash" : "none";
+		const restored = next === "execute" ? "write, edit, bash" : "none";
+		const verb = next === "plan" ? "removed" : "restored";
+		const from = current === "plan" ? "removed" : "kept";
+		this.showStatus(
+			`\u2713 Agent mode: ${current.toUpperCase()} \u2192 ${next.toUpperCase()}. ` +
+				`Write tools ${from === "removed" ? "still" : ""}active. ` +
+				`${verb === "removed" ? `Removed: ${removed}.` : `Restored: ${restored}.`} ` +
+				`(${active.length} tool${active.length === 1 ? "" : "s"} active).`,
+		);
+		// Re-render the footer so the new mode badge appears right away.
+		this.footer.invalidate();
+		this.ui.requestRender();
 	}
 
 	stop(): void {

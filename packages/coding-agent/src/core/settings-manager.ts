@@ -95,6 +95,12 @@ export interface Settings {
 	hideThinkingBlock?: boolean;
 	shellPath?: string; // Custom shell path (e.g., for Cygwin users on Windows)
 	quietStartup?: boolean;
+	/**
+	 * Agent mode. "execute" (default) gives the model the full default
+	 * tool set. "plan" strips write/edit/bash so the model can only
+	 * read, search, and propose a plan.
+	 */
+	agentMode?: "plan" | "execute";
 	shellCommandPrefix?: string; // Prefix prepended to every bash command (e.g., "shopt -s expand_aliases" for alias support)
 	npmCommand?: string[]; // Command used for npm package lookup/install operations, argv-style (e.g., ["mise", "exec", "node@20", "--", "npm"])
 	collapseChangelog?: boolean; // Show condensed changelog after update (use /changelog for full)
@@ -1105,6 +1111,25 @@ export class SettingsManager {
 		}
 		this.globalSettings.images.blockImages = blocked;
 		this.markModified("images", "blockImages");
+		this.save();
+	}
+
+	/**
+	 * Agent mode: "execute" (default) gives the model the full default
+	 * tool set, including write/edit/bash. "plan" strips all mutating
+	 * tools so the model can only read, search, and propose a plan —
+	 * the user has to switch back to "execute" to apply changes.
+	 *
+	 * Persisted to `settings.json: { agentMode: "plan" | "execute" }`.
+	 */
+	getAgentMode(): "plan" | "execute" {
+		const m = this.settings.agentMode;
+		return m === "plan" ? "plan" : "execute";
+	}
+
+	setAgentMode(mode: "plan" | "execute"): void {
+		this.globalSettings.agentMode = mode;
+		this.markModified("agentMode");
 		this.save();
 	}
 

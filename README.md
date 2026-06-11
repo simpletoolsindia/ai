@@ -82,7 +82,7 @@ rm -rf ~/.ai ~/.local/bin/ai
 
 ```bash
 # Specific version / branch / commit
-curl -fsSL https://raw.githubusercontent.com/simpletoolsindia/ai/main/install.sh | bash -s -- --ref v0.79.2
+curl -fsSL https://raw.githubusercontent.com/simpletoolsindia/ai/main/install.sh | bash -s -- --ref v0.79.4
 
 # Local checkout (for development)
 git clone https://github.com/simpletoolsindia/ai.git
@@ -121,6 +121,7 @@ In interactive mode you can:
 |---|---|
 | `/model` | pick a model (fuzzy search, recent, scoped) |
 | `/login` | OAuth / API key login for a cloud provider, or add a custom OpenAI-compatible endpoint |
+| `/mode` | switch between PLAN (read-only) and EXECUTE (full tools) modes |
 | `/searcheng` | view or update the SearXNG endpoint used by `websearch` |
 | `/scout-stack-auto` | run all configured subagents in parallel |
 | `/scout-backend` `/scout-db` `/scout-frontend` | run a specific domain scout |
@@ -130,6 +131,36 @@ In interactive mode you can:
 | `/subagent` | spawn a subagent manually |
 | `Esc Esc` | session tree (branch / fork / resume) |
 | `Ctrl+C` | cancel the current operation |
+
+## What's new in 0.79.4
+
+The final production build. Two new features for safe, visible control over the agent:
+
+- **PLAN / EXECUTE modes** — switch the agent between a read-only "planning" mode and the default "execute" mode. In PLAN mode, `write`, `edit`, and `bash` are stripped from the active tool set; the system prompt gets a one-line note explaining that the model can only read, search, and propose a plan. The new `/mode` slash command toggles:
+  ```
+  /mode                  # show current mode
+  /mode plan             # switch to PLAN (read-only)
+  /mode execute          # switch to EXECUTE (full tools)
+  /mode toggle           # flip
+  ```
+  Mode is persisted to `~/.ai/agent/settings.json: { "agentMode": "plan" | "execute" }`.
+- **Mode badge in the footer** — the status bar always shows the current mode next to the cwd/branch line: `PLAN` (warning color) or `EXECUTE` (dim). You'll never be surprised by which tools the model can use.
+- 9 new tests in `test/agent-mode.test.ts` (persistence, system-prompt hint, slash-command wiring, footer wiring).
+
+## What's new in 0.79.3
+
+A polish release focused on perceived responsiveness:
+
+- **Dynamic progress messages** — the spinner next to the working indicator no longer just says "Working...". It now cycles through 5 phase labels as the agent turns progress:
+  | Phase | When | Message |
+  |---|---|---|
+  | 1 | Agent turn starts | `Thinking...` |
+  | 2 | Assistant message starts streaming | `Working...` |
+  | 3 | Model emits a tool call | `Tool calling...` |
+  | 4 | Tool is actually executing | `Executing task...` |
+  | 5 | Final response shaping up | `Almost done...` |
+  Extensions can still override with `setWorkingMessage()`. See the new test in `test/dynamic-working-messages.test.ts`.
+- 3 regression tests in `test/dynamic-working-messages.test.ts` guard the phase→event wiring so a future refactor can't silently break it.
 
 ## What's new in 0.79.2
 

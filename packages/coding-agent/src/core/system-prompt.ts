@@ -22,6 +22,13 @@ export interface BuildSystemPromptOptions {
 	contextFiles?: Array<{ path: string; content: string }>;
 	/** Pre-loaded skills. */
 	skills?: Skill[];
+	/**
+	 * Current agent mode. In "plan", the prompt gets a one-line
+	 * reminder that write tools are unavailable and the model should
+	 * describe what it would do before the user switches back to
+	 * "execute". Defaults to "execute" (no extra text).
+	 */
+	mode?: "plan" | "execute";
 }
 
 /** Build the system prompt with tools, guidelines, and context */
@@ -35,6 +42,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 		cwd,
 		contextFiles: providedContextFiles,
 		skills: providedSkills,
+		mode = "execute",
 	} = options;
 	const resolvedCwd = cwd;
 	const promptCwd = resolvedCwd.replace(/\\/g, "/");
@@ -133,7 +141,11 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 
 Available tools:
 ${toolsList}
-(Other custom tools may be available.)
+(Other custom tools may be available.)${
+		mode === "plan"
+			? `\n\n\u26a0\ufe0f PLAN MODE: write/edit/bash are disabled. Read, search, and plan. Describe what you would change, then ask the user to run \`/mode execute\` (or press Tab) to apply edits.`
+			: ""
+	}
 
 Tool usage:
 - \`read\` is for one file. To scan many files, use \`grep\` (content) or \`find\`/\`ls\` (names).

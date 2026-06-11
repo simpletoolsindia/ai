@@ -908,6 +908,12 @@ export class SessionManager {
 	_persist(entry: SessionEntry): void {
 		if (!this.persist || !this.sessionFile) return;
 
+		// Guard: reinstall may have deleted the session file.
+		// If the file is gone, reset the flush state so we re-create it.
+		if (this.flushed && !existsSync(this.sessionFile)) {
+			this.flushed = false;
+		}
+
 		const hasAssistant = this.fileEntries.some((e) => e.type === "message" && e.message.role === "assistant");
 		if (!hasAssistant) {
 			if (this.flushed) {

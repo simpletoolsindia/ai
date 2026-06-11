@@ -149,8 +149,10 @@ export interface Settings {
 	/** Turn-level timeouts to prevent endless loops. */
 	timeout?: TimeoutSettings;
 	sessionDir?: string; // Custom session storage directory (same format as --session-dir CLI flag)
-	httpIdleTimeoutMs?: number; // HTTP header/body idle timeout in milliseconds; 0 disables it
+	HTTPIdleTimeoutMs?: number; // HTTP header/body idle timeout in milliseconds; 0 disables it
 	websocketConnectTimeoutMs?: number; // WebSocket connect/open handshake timeout in milliseconds; 0 disables it
+	/** Disabled tools — these tool names are hidden from the agent and user. */
+	disabledTools?: string[];
 }
 
 /** Deep merge settings: project/overrides take precedence, nested objects merge recursively */
@@ -1251,6 +1253,11 @@ export class SettingsManager {
 			turnTimeoutMs: (t.turnTimeoutSeconds ?? 120) * 1000,
 			maxRetries: t.maxRetries ?? 3,
 		};
+	}
+
+	/** Get disabled tools list. */
+	getDisabledTools(): string[] {
+		return this.settings.disabledTools ?? [];
 	}
 
 	setWarnings(warnings: WarningSettings): void {

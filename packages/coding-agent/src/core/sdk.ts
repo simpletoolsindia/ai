@@ -227,6 +227,13 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		}
 	}
 
+	// Persist the resolved model so it's restored on next launch.
+	// This ensures the last-used model survives reinstalls, crashes,
+	// and explicit shutdowns.
+	if (model) {
+		settingsManager.setDefaultModelAndProvider(model.provider, model.id);
+	}
+
 	let thinkingLevel = options.thinkingLevel;
 
 	// If session has data, restore thinking level from it
@@ -263,9 +270,12 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const allowedToolNames = options.tools ?? (options.noTools === "all" ? [] : undefined);
 	const excludedToolNames = options.excludeTools;
 	const excludedToolNameSet = excludedToolNames ? new Set(excludedToolNames) : undefined;
+	// Also filter out tools disabled in settings
+	const disabledTools = settingsManager.getDisabledTools();
+	const disabledToolSet = new Set(disabledTools);
 	const initialActiveToolNames: string[] = (
 		options.tools ? [...options.tools] : options.noTools ? [] : defaultActiveToolNames
-	).filter((name) => !excludedToolNameSet?.has(name));
+	).filter((name) => !excludedToolNameSet?.has(name) && !disabledToolSet.has(name));
 
 	let agent: Agent;
 

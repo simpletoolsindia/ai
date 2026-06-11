@@ -10240,12 +10240,12 @@ export const MODELS = {
 			input: ["text", "image"],
 			cost: {
 				input: 0.12,
-				output: 0.36,
+				output: 0.35,
 				cacheRead: 0.09,
 				cacheWrite: 0,
 			},
 			contextWindow: 262144,
-			maxTokens: 8192,
+			maxTokens: 262144,
 		} satisfies Model<"openai-completions">,
 		"google/gemma-4-31b-it:free": {
 			id: "google/gemma-4-31b-it:free",

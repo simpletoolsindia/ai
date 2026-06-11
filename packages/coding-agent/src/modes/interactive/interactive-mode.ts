@@ -652,6 +652,23 @@ export class InteractiveMode {
 		if (this.options.verbose || !this.settingsManager.getQuietStartup()) {
 			const logo = theme.bold(theme.fg("accent", APP_NAME)) + theme.fg("dim", ` v${this.version}`);
 
+			// Custom ASCII art logo. Painted with the theme's accent color
+			// (no external font dependency) so the welcome screen looks
+			// polished on first launch.
+			const accent = (s: string) => theme.fg("accent", s);
+			const dim = (s: string) => theme.fg("dim", s);
+			const art = [
+				accent("   ╔══════╗ "),
+				accent("   ║      ║ "),
+				accent("╔══╝      ╚══╗"),
+				accent("║            ║   ") + dim("thinking partner"),
+				accent("║      ▄     ║   ") + dim("for developers"),
+				accent("║            ║   ") + dim(`v${this.version}`),
+				accent("╚══╗      ╔══╝"),
+				accent("   ║      ║ "),
+				accent("   ╚══════╝ "),
+			].join("\n");
+
 			// Build startup instructions using keybinding hint helpers
 			const hint = (keybinding: AppKeybinding, description: string) => keyHint(keybinding, description);
 
@@ -685,15 +702,15 @@ export class InteractiveMode {
 			].join(theme.fg("muted", " · "));
 			const compactOnboarding = theme.fg(
 				"dim",
-				`Press ${keyText("app.tools.expand")} to show full startup help and loaded resources.`,
+				`Press ${keyText("app.tools.expand")} for the full reference · /help for all commands · Tab to toggle PLAN/EXECUTE mode`,
 			);
 			const onboarding = theme.fg(
 				"dim",
-				`Ai can explain its own features and look up its docs. Ask it how to use or extend ai. Ai is a fork of pi by Mario Zechner / earendil-works; see NOTICE.md.`,
+				`A coding agent that reads, runs, and writes for you. Ask it to fix a bug, refactor a module, write tests, or explore a codebase.`,
 			);
 			this.builtInHeader = new ExpandableText(
-				() => `${logo}\n${compactInstructions}\n${compactOnboarding}\n\n${onboarding}`,
-				() => `${logo}\n${expandedInstructions}\n\n${onboarding}`,
+				() => `${art}\n\n${logo}\n${compactInstructions}\n${compactOnboarding}\n\n${onboarding}`,
+				() => `${art}\n\n${logo}\n${expandedInstructions}\n\n${onboarding}`,
 				this.getStartupExpansionState(),
 				1,
 				0,
@@ -983,6 +1000,20 @@ export class InteractiveMode {
 	}
 
 	private formatExtensionDisplayPath(path: string): string {
+		// Built-in inline extensions: render as `built-in:<name>` so the
+		// extended help doesn't show the synthetic <inline:N> path.
+		if (path.startsWith("<inline:")) {
+			const BUILTIN_INLINE_LABELS = ["hermes-memory", "context-mode", "diagnostics", "ui-tweaks", "tools-bridge"];
+			const m = /^<inline:(\d+)>$/.exec(path);
+			if (m) {
+				const n = Number.parseInt(m[1], 10);
+				if (n >= 1 && n <= BUILTIN_INLINE_LABELS.length) {
+					return `built-in:${BUILTIN_INLINE_LABELS[n - 1]}`;
+				}
+				return `built-in:${n}`;
+			}
+			return "built-in";
+		}
 		let result = this.formatDisplayPath(path);
 		result = result.replace(/\/index\.ts$/, "").replace(/\/index\.js$/, "");
 		return result;
@@ -1092,6 +1123,23 @@ export class InteractiveMode {
 		index: number,
 		allPaths: Array<{ path: string; segments: string[] }>,
 	): string {
+		// Built-in (inline) extensions: replace the synthetic <inline:N>
+		// path with a friendly name. The order matches BUILT_IN_EXTENSION_FACTORIES
+		// in src/core/built-in-extensions.ts. If we add more built-ins, update
+		// this map.
+		if (resourcePath.startsWith("<inline:")) {
+			const BUILTIN_INLINE_LABELS = ["hermes-memory", "context-mode", "diagnostics", "ui-tweaks", "tools-bridge"];
+			const m = /^<inline:(\d+)>$/.exec(resourcePath);
+			if (m) {
+				const n = Number.parseInt(m[1], 10);
+				if (n >= 1 && n <= BUILTIN_INLINE_LABELS.length) {
+					return `built-in:${BUILTIN_INLINE_LABELS[n - 1]}`;
+				}
+				return `built-in:${n}`;
+			}
+			return "built-in";
+		}
+
 		const segments = allPaths[index]?.segments;
 		if (!segments || segments.length === 0) {
 			return this.getCompactPathLabel(resourcePath);
@@ -2540,6 +2588,7 @@ export class InteractiveMode {
 		this.ui.onDebug = () => this.handleDebugCommand();
 		this.defaultEditor.onAction("app.model.select", () => this.showModelSelector());
 		this.defaultEditor.onAction("app.tools.expand", () => this.toggleToolOutputExpansion());
+		this.defaultEditor.onAction("app.mode.toggle", () => this.handleModeCommand("toggle"));
 		this.defaultEditor.onAction("app.thinking.toggle", () => this.toggleThinkingBlockVisibility());
 		this.defaultEditor.onAction("app.editor.external", () => this.openExternalEditor());
 		this.defaultEditor.onAction("app.message.followUp", () => this.handleFollowUp());
@@ -2654,6 +2703,11 @@ export class InteractiveMode {
 			}
 			if (text === "/hotkeys") {
 				this.handleHotkeysCommand();
+				this.editor.setText("");
+				return;
+			}
+			if (text === "/help") {
+				this.handleHelpCommand();
 				this.editor.setText("");
 				return;
 			}
@@ -6240,6 +6294,103 @@ export class InteractiveMode {
 		);
 		// Re-render the footer so the new mode badge appears right away.
 		this.footer.invalidate();
+		this.ui.requestRender();
+	}
+
+	/**
+	 * `/help` — show all available slash commands with descriptions and
+	 * usage hints. Pulled from `BUILTIN_SLASH_COMMANDS` and grouped by
+	 * category for easier scanning.
+	 */
+	private handleHelpCommand(): void {
+		const commands = BUILTIN_SLASH_COMMANDS;
+		// Group commands by category using a simple heuristic on the
+		// command name. Keeps the help output organized even when the
+		// underlying command list grows.
+		const groups: Array<{ title: string; items: typeof commands }> = [
+			{
+				title: "Session",
+				items: commands.filter((c) =>
+					["new", "clear", "resume", "tree", "rename", "fork", "clone", "delete", "name", "session"].includes(c.name),
+				),
+			},
+			{
+				title: "Mode & Tools",
+				items: commands.filter((c) =>
+					["mode", "model", "scoped-models", "scopes", "tools", "compact", "todos", "todo", "clear-todo"].includes(c.name),
+				),
+			},
+			{
+				title: "Search & Memory",
+				items: commands.filter((c) =>
+					["searcheng", "websearch", "webfetch", "memory", "skills"].includes(c.name),
+				),
+			},
+			{
+				title: "Sharing & Export",
+				items: commands.filter((c) =>
+					["export", "import", "share", "copy", "html", "markdown", "json"].includes(c.name),
+				),
+			},
+			{
+				title: "Auth & Providers",
+				items: commands.filter((c) => ["login", "logout", "providers"].includes(c.name)),
+			},
+			{
+				title: "Configuration",
+				items: commands.filter((c) =>
+					["settings", "hotkeys", "trust", "scout", "install", "reload", "theme", "changelog", "help"].includes(c.name),
+				),
+			},
+		];
+		const used = new Set(groups.flatMap((g) => g.items.map((i) => i.name)));
+		const other = commands.filter((c) => !used.has(c.name));
+		if (other.length > 0) groups.push({ title: "Other", items: other });
+
+		const fmtKey = (kb: AppKeybinding): string => {
+			try {
+				return this.getAppKeyDisplay(kb);
+			} catch {
+				return "";
+			}
+		};
+
+		const lines: string[] = [];
+		lines.push(theme.bold(theme.fg("accent", "ai commands reference")));
+		lines.push(
+			theme.fg(
+				"dim",
+				`Run any command by typing it after \`/\`. The keybinding for each app action is shown in brackets.`,
+			),
+		);
+		lines.push("");
+
+		for (const g of groups) {
+			if (g.items.length === 0) continue;
+			lines.push(theme.bold(theme.fg("muted", g.title)));
+			for (const c of g.items) {
+				lines.push(`  ${theme.fg("accent", "/" + c.name.padEnd(14))} ${c.description}`);
+			}
+			lines.push("");
+		}
+
+		// Key tips
+		lines.push(theme.bold(theme.fg("muted", "Quick keys")));
+		lines.push(`  ${fmtKey("app.mode.toggle")}   toggle PLAN/EXECUTE mode (default is PLAN)`);
+		lines.push(`  ${fmtKey("app.tools.expand")}   expand/collapse tool output and the help screen`);
+		lines.push(`  ${fmtKey("app.model.select")}   open the model picker`);
+		lines.push(`  ${fmtKey("app.thinking.cycle")} cycle the thinking level`);
+		lines.push(`  ${fmtKey("app.interrupt")}   interrupt the current operation`);
+		lines.push(`  ${fmtKey("app.clear")} twice or ${fmtKey("app.exit")} on empty input   exit ai`);
+		lines.push("");
+		lines.push(
+			theme.fg(
+				"dim",
+				`Tip: press ${fmtKey("app.tools.expand")} on the welcome screen to see every keybinding in one place.`,
+			),
+		);
+
+		this.showStatus(lines.join("\n"));
 		this.ui.requestRender();
 	}
 

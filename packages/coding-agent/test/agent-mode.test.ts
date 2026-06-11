@@ -43,9 +43,9 @@ describe("SettingsManager: agent mode persistence", () => {
 		// mkdtempSync already created the dir
 	});
 
-	it("defaults to 'execute'", () => {
+	it("defaults to 'plan' (safer mode that strips write tools)", () => {
 		const sm = freshSettingsManager();
-		expect(sm.getAgentMode()).toBe("execute");
+		expect(sm.getAgentMode()).toBe("plan");
 	});
 
 	it("round-trips a 'plan' value to disk and back", async () => {
@@ -63,14 +63,14 @@ describe("SettingsManager: agent mode persistence", () => {
 		expect(sm2.getAgentMode()).toBe("plan");
 	});
 
-	it("treats unknown values as 'execute' (defensive default)", () => {
+	it("treats unknown values as 'plan' (the safer default)", () => {
 		const agentDir = join(TEST_DIR, `weird-${Math.random().toString(36).slice(2)}`);
 		// Pre-create the settings file with a bogus mode value
 		const { mkdirSync } = require("node:fs") as typeof import("node:fs");
 		mkdirSync(agentDir, { recursive: true });
 		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ agentMode: "frobnicate" }));
 		const sm = SettingsManager.create(TEST_DIR, agentDir);
-		expect(sm.getAgentMode()).toBe("execute");
+		expect(sm.getAgentMode()).toBe("plan");
 	});
 });
 
@@ -87,7 +87,7 @@ describe("buildSystemPrompt: mode integration", () => {
 		cwd: "/tmp/proj",
 	};
 
-	it("does NOT include the PLAN-mode hint by default", () => {
+	it("does NOT include the PLAN-mode hint by default (default is 'execute')", () => {
 		const p = buildSystemPrompt({ ...baseOpts });
 		expect(p).not.toContain("PLAN MODE");
 	});

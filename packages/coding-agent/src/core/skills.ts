@@ -330,36 +330,29 @@ function loadSkillFromFile(
 
 		// Use description from frontmatter, or fall back to deriving it from the body
 		let description = frontmatter.description?.trim();
-		let descriptionWasDerived = false;
 		if (!description || description.length === 0) {
 			const derived = deriveDescriptionFromBody(body);
 			if (derived) {
 				description = derived;
-				descriptionWasDerived = true;
-				// Advisory: the skill still loads (with the derived
-				// description), so this is an info note rather than a
-				// warning. Users see it once at session start.
-				diagnostics.push({
-					type: "info" as const,
-					message: `No 'description' in frontmatter; using first heading as fallback: "${derived}". Add a 'description' field to the frontmatter to silence this.`,
-					path: filePath,
-				});
+				// Skill loaded successfully using a derived description.
+				// No need to nag the user — the skill works. We just keep
+				// the `descriptionWasDerived` flag available for callers
+				// that want to surface it.
 			} else {
 				diagnostics.push({
 					type: "warning",
-					message: "Skill has no description and no extractable heading; skipping load. Add a 'description' field to the frontmatter.",
+					message:
+						"Skill has no description and no extractable heading; skipping load. Add a 'description' field to the frontmatter.",
 					path: filePath,
 				});
 				return { skill: null, diagnostics };
 			}
 		}
 
-		// Validate description length (only if not derived; derived ones are already truncated)
-		if (!descriptionWasDerived) {
-			const descErrors = validateDescription(description);
-			for (const error of descErrors) {
-				diagnostics.push({ type: "warning", message: error, path: filePath });
-			}
+		// Validate description length
+		const descErrors = validateDescription(description);
+		for (const error of descErrors) {
+			diagnostics.push({ type: "warning", message: error, path: filePath });
 		}
 
 		// Use name from frontmatter, or fall back to parent directory name

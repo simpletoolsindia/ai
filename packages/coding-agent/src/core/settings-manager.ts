@@ -96,9 +96,11 @@ export interface Settings {
 	shellPath?: string; // Custom shell path (e.g., for Cygwin users on Windows)
 	quietStartup?: boolean;
 	/**
-	 * Agent mode. "execute" (default) gives the model the full default
-	 * tool set. "plan" strips write/edit/bash so the model can only
-	 * read, search, and propose a plan.
+	 * Agent mode. "plan" (default) gives the model a read-only tool set
+	 * so it can only explore, search, and propose a plan. The user has
+	 * to run `/mode execute` (or press Tab) to apply edits. Set to
+	 * "execute" to skip the gate and let the model write/edit/bash on
+	 * the first turn.
 	 */
 	agentMode?: "plan" | "execute";
 	shellCommandPrefix?: string; // Prefix prepended to every bash command (e.g., "shopt -s expand_aliases" for alias support)
@@ -1124,7 +1126,11 @@ export class SettingsManager {
 	 */
 	getAgentMode(): "plan" | "execute" {
 		const m = this.settings.agentMode;
-		return m === "plan" ? "plan" : "execute";
+		// Default is "plan" — a safer default that prevents the model
+		// from writing files in a brand-new session. The user can run
+		// `/mode execute` (or press Tab) to switch.
+		if (m === "execute") return "execute";
+		return "plan";
 	}
 
 	setAgentMode(mode: "plan" | "execute"): void {

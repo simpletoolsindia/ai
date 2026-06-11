@@ -898,7 +898,22 @@ export async function main(args: string[], options?: MainOptions) {
 		// discovery hadn't run yet.)
 		await modelRegistry.refreshDiscoveredModels();
 
-		const modelPatterns = parsed.models ?? settingsManager.getEnabledModels();
+		// Pick the active model in this order:
+		//   1. Explicit --model flag(s) on the command line
+		//   2. `enabledModels` persisted in settings.json (set whenever
+		//      the user picks a model in the picker, cycles models, or
+		//      starts a session with a specific model)
+		//   3. `defaultProvider` + `defaultModel` persisted in settings.json
+		//      (set on first successful model pick; acts as a fallback
+		//      if `enabledModels` is empty for any reason)
+		const enabledFromSettings = settingsManager.getEnabledModels();
+		const fallbackDefault =
+			settingsManager.getDefaultProvider() && settingsManager.getDefaultModel()
+				? [`${settingsManager.getDefaultProvider()}/${settingsManager.getDefaultModel()}`]
+				: undefined;
+		const modelPatterns =
+			parsed.models ??
+			(enabledFromSettings && enabledFromSettings.length > 0 ? enabledFromSettings : fallbackDefault);
 
 		const scopedModels =
 			modelPatterns && modelPatterns.length > 0 ? await resolveModelScope(modelPatterns, modelRegistry) : [];

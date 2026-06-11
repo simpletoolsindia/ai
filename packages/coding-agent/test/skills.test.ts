@@ -81,14 +81,13 @@ describe("skills", () => {
 			});
 
 			// Skill is loaded using the first heading as the description fallback.
+			// No diagnostic is emitted: the skill is fully usable, and a
+			// noisy warning on every start-up was deemed more annoying
+			// than helpful.
 			expect(skills).toHaveLength(1);
 			expect(skills[0].name).toBe("missing-description");
 			expect(skills[0].description).toBe("Missing Description");
-			expect(
-				diagnostics.some((d: ResourceDiagnostic) =>
-					d.message.includes("No 'description' in frontmatter"),
-				),
-			).toBe(true);
+			expect(diagnostics.some((d: ResourceDiagnostic) => d.type === "warning")).toBe(false);
 		});
 
 		it("should ignore unknown frontmatter fields", () => {
@@ -110,12 +109,9 @@ describe("skills", () => {
 			expect(skills).toHaveLength(1);
 			expect(skills[0].name).toBe("no-frontmatter");
 			expect(skills[0].description).toBe("No Frontmatter");
-			// Info-level diagnostic, not a warning
-			expect(
-				diagnostics.some((d: ResourceDiagnostic) =>
-					d.message.includes("No 'description' in frontmatter"),
-				),
-			).toBe(true);
+			// Silent: the skill loads cleanly with a derived description.
+			// Users get a clean start-up screen.
+			expect(diagnostics.some((d: ResourceDiagnostic) => d.type === "warning")).toBe(false);
 		});
 		it("should load nested skills recursively", () => {
 			const { skills, diagnostics } = loadSkillsFromDir({

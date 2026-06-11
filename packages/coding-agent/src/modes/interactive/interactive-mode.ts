@@ -3078,6 +3078,7 @@ export class InteractiveMode {
 				if (this.settingsManager.getShowTerminalProgress()) {
 					this.ui.terminal.setProgress(false);
 				}
+				// Stop loading animation IMMEDIATELY so the user sees completion
 				if (this.loadingAnimation) {
 					this.loadingAnimation.stop();
 					this.loadingAnimation = undefined;
@@ -3089,11 +3090,12 @@ export class InteractiveMode {
 					this.streamingMessage = undefined;
 				}
 				this.pendingTools.clear();
+				this.ui.requestRender(); // show clean state BEFORE background tasks
 
-				// Run verification loop: check if the agent completed the task correctly
-				await this.maybeRunVerificationLoop(event);
+				// Run verification loop asynchronously — don't block the UI
+				this.maybeRunVerificationLoop(event).catch(() => {});
 
-				// Observe this turn for persona learning
+				// Observe this turn for persona learning (async, non-blocking)
 				this.observeTurnForPersona(event);
 
 				await this.checkShutdownRequested();

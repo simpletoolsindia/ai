@@ -4,6 +4,7 @@ import { type Static, Type } from "typebox";
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import type { ToolDefinition, ToolRenderContext } from "../extensions/types.ts";
 import { getTextOutput, str } from "./render-utils.ts";
+import { gcSpillover, spillToDisk } from "./spillover.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
 import { formatSize, type TruncationResult, truncateHead } from "./truncate.ts";
 
@@ -13,9 +14,16 @@ const webfetchSchema = Type.Object({
 	}),
 	maxBytes: Type.Optional(
 		Type.Number({
-			description: "Maximum response size in bytes to return (default: 102400 = 100KB, max: 1048576 = 1MB)",
+			description: "Maximum response size in bytes to return inline (default: 102400 = 100KB, max: 1048576 = 1MB). Larger responses are truncated in the inline output and the full content is written to a temp file the LLM can read on demand.",
 			minimum: 1024,
 			maximum: 1048576,
+		}),
+	),
+	spilloverMaxBytes: Type.Optional(
+		Type.Number({
+			description: "If the response exceeds maxBytes, write up to this many bytes to the spillover temp file (default: 10485760 = 10MB, max: 104857600 = 100MB). Set to 0 to disable spillover entirely.",
+			minimum: 0,
+			maximum: 104857600,
 		}),
 	),
 	timeoutMs: Type.Optional(
@@ -37,6 +45,8 @@ export interface WebfetchToolDetails {
 	bytes: number;
 	truncation?: TruncationResult;
 	timedOut?: boolean;
+	spilloverPath?: string;
+	spilloverBytes?: number;
 }
 
 /**
@@ -58,9 +68,14 @@ export interface WebfetchOperations {
 }
 
 const DEFAULT_MAX_BYTES_VALUE = 100 * 1024; // 100KB
+const DEFAULT_SPILLOVER_MAX_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_SPILLOVER_MAX_BYTES = 100 * 1024 * 1024; // 100MB
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MIN_TIMEOUT_MS = 1000;
 const MAX_TIMEOUT_MS = 120_000;
+
+// Best-effort GC of old spillover files on tool module load.
+gcSpillover();
 
 const TEXT_CONTENT_TYPES = new Set([
 	"text/html",
@@ -343,16 +358,56 @@ export function createWebfetchToolDefinition(
 				displayText = result.content;
 			}
 
+			// Spillover: if the response was truncated and spillover is enabled
+			// (spilloverMaxBytes > 0), write the full decoded text to a temp
+			// file and tell the LLM where to find it. The file lives in
+			// ~/.ai/agent/cache/webfetch/ and is GC'd after 7 days.
+			let spilloverPath: string | undefined;
+			let spilloverBytes: number | undefined;
+			const spilloverMaxBytes = Math.min(
+				MAX_SPILLOVER_MAX_BYTES,
+				Math.max(0, p.spilloverMaxBytes ?? DEFAULT_SPILLOVER_MAX_BYTES),
+			);
+			if (truncated && spilloverMaxBytes > 0) {
+				try {
+					// If the full text is larger than spilloverMaxBytes, truncate at
+					// a char boundary (TextDecoder-safe) before writing.
+					const content =
+						text.length > spilloverMaxBytes
+							? text.slice(0, spilloverMaxBytes)
+							: text;
+					const ext = isHtml || contentType.includes("html") ? "html" : contentType.includes("json") ? "json" : "md";
+					const result = spillToDisk(content, ext);
+					spilloverPath = result.path;
+					spilloverBytes = result.bytes;
+				} catch (err) {
+					// Spillover is best-effort; a failure here doesn't fail the
+					// fetch. The LLM just loses access to the full content.
+				}
+			}
+
 			const summary =
 				`Fetched ${formatSize(bytes.byteLength)} of ${contentType || "text"} from ${finalUrl} (HTTP ${status})` +
-				(truncation ? ` [truncated to first ${truncation.outputLines} of ${truncation.totalLines} lines]` : "");
+				(truncation ? ` [truncated to first ${truncation.outputLines} of ${truncation.totalLines} lines]` : "") +
+				(spilloverPath
+					? ` [full content (${formatSize(spilloverBytes ?? 0)}) saved to ${spilloverPath} — use the read tool to view]`
+					: "");
 
 			return {
 				content: [
 					{ type: "text" as const, text: summary },
 					{ type: "text" as const, text: displayText },
 				],
-				details: { url: parsedUrl.href, status, contentType, finalUrl, bytes: bytes.byteLength, truncation },
+				details: {
+					url: parsedUrl.href,
+					status,
+					contentType,
+					finalUrl,
+					bytes: bytes.byteLength,
+					truncation,
+					spilloverPath,
+					spilloverBytes,
+				},
 			};
 		},
 		renderCall(args, theme: Theme, context: ToolRenderContext) {

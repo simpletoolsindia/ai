@@ -344,6 +344,22 @@ export class AgentSession {
 		this._baseToolsOverride = config.baseToolsOverride;
 		this._sessionStartEvent = config.sessionStartEvent ?? { type: "session_start", reason: "startup" };
 
+		// Honor the persisted agent mode at session construction. If the
+		// user has set `agentMode: "plan"` in settings.json, strip the
+		// mutating tools (`write`, `edit`, `bash`) from the initial
+		// active tool set so the model can't mutate files from the very
+		// first turn. The user has to run `/mode execute` (or press Tab)
+		// to apply edits.
+		if (
+			config.settingsManager?.getAgentMode() === "plan" &&
+			this._initialActiveToolNames
+		) {
+			const MUTATING = new Set(["write", "edit", "bash"]);
+			this._initialActiveToolNames = this._initialActiveToolNames.filter(
+				(n) => !MUTATING.has(n),
+			);
+		}
+
 		// Always subscribe to agent events for internal handling
 		// (session persistence, extensions, auto-compaction, retry logic)
 		this._unsubscribeAgent = this.agent.subscribe(this._handleAgentEvent);

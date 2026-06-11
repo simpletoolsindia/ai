@@ -77,6 +77,36 @@ describe("optimized system prompt", () => {
 		});
 	});
 
+	describe("preserves the tool-usage section", () => {
+		it("explains when to use read vs grep/find/ls", () => {
+			expect(prompt).toContain("`read` is for one file");
+			expect(prompt).toContain("use `grep` (content) or `find`/`ls` (names)");
+		});
+
+		it("explains the role of subagent", () => {
+			expect(prompt).toContain("`subagent` delegates a focused subtask");
+		});
+
+		it("advises editing existing files over creating new ones", () => {
+			expect(prompt).toContain("Prefer editing existing files over creating new ones");
+		});
+
+		it("tells the model to summarize tool output", () => {
+			expect(prompt).toContain("Don't quote full tool output back to the user");
+		});
+
+		it("encourages asking clarifying questions when ambiguous", () => {
+			expect(prompt).toContain("ask one short clarifying question rather than guessing");
+		});
+	});
+
+	describe("mentions the agent loop", () => {
+		it("says the model can iterate via tool calls", () => {
+			expect(prompt).toContain("agent loop");
+			expect(prompt).toContain("can call multiple tools");
+		});
+	});
+
 	describe("preserves all 4 docs paths and cross-references", () => {
 		it("includes README path", () => {
 			expect(prompt).toMatch(/README: .*README\.md/);

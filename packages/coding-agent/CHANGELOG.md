@@ -2,6 +2,29 @@
 
 > **Fork notice:** This is the changelog for **ai**, a fork of [pi](https://github.com/earendil-works/pi). Entries up to and including v0.78.1 are inherited verbatim from the upstream pi project. Starting with the first ai release, new entries are added by this fork. See [NOTICE.md](https://github.com/simpletoolsindiaorg/ai/blob/main/NOTICE.md) for the full fork attribution.
 
+## [0.79.2] - 2026-06-11
+
+The final production build. Adds runtime provider onboarding, percentage-based auto-compaction, and a tighter system prompt.
+
+### New Features
+
+- **`/login` → "Add OpenAI-compatible provider"** — a new option in the `/login` flow's auth-type selector. Five-step dialog (provider name, base URL, API key, model ID, optional display name) writes a complete `providers.<name>` entry to `models.json` and the API key to `auth.json`, then refreshes the registry so the new model is immediately selectable. Works with Groq, Together, Fireworks, OpenRouter, LM Studio, vLLM, llama.cpp server, and any other OpenAI-compatible endpoint.
+- **Auto-compact at 90% by default** — new `compaction.threshold` field in `settings.json` (default `0.9`). `shouldCompact()` now uses a percentage-based check when the model's context window is known, falls back to the existing `reserveTokens` heuristic only when `threshold` is 0, and defers to the overflow safety net when the window is unknown.
+- **Optimized system prompt** — 17% shorter overall. Adds a compact "Tool usage" section (when to use `read` vs `grep`/`find`/`ls`, when to delegate to `subagent`, prefer editing existing files, summarize tool output, ask one clarifying question) and a one-liner about the agent loop. The docs section is now 5 lines instead of 7, with all 10 topic cross-references intact. All rules preserved; 16 regression tests in `system-prompt-optimized.test.ts` guard against accidental removal.
+
+### Added
+
+- `ModelRegistry.addOpenAICompatibleProvider({name, baseUrl, apiKey, modelId, modelName?})` — programmatic equivalent of the new `/login` flow; can be called from SDK consumers.
+- `ModelRegistry.isProviderAuthOptional(provider)` — public accessor (was already an internal helper).
+- `SettingsManager.getCompactionThreshold()` / `setCompactionThreshold(value)` — runtime configurability for the new percentage-based trigger.
+- `core/image-block-filter.ts` — extracted `convertToLlmWithBlockImages` from `sdk.ts` into a testable, single-purpose module (no behavior change).
+
+### Tests
+
+- 12 new tests in `add-openai-provider.test.ts` (happy path, validation, schema, conflict detection)
+- 3 new tests in `compaction.test.ts` (90% default, custom thresholds, reserveTokens fallback)
+- 16 regression tests in `system-prompt-optimized.test.ts` (all rules preserved)
+
 ## [0.79.1] - 2026-06-11
 
 Quality-of-life batch. Every fix in this release was found in real testing on a fresh install.

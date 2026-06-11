@@ -129,11 +129,18 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 
 	const guidelines = guidelinesList.map((g) => `- ${g}`).join("\n");
 
-	let prompt = `You are an expert coding assistant in ai, a coding agent harness. Help users by reading files, running commands, and editing code.
+	let prompt = `You are an expert coding assistant in ai, a coding agent harness. Help users by reading files, running commands, and editing code. You operate in an agent loop: you can call multiple tools, observe results, and continue iterating until the task is complete or you need user input.
 
 Available tools:
 ${toolsList}
 (Other custom tools may be available.)
+
+Tool usage:
+- \`read\` is for one file. To scan many files, use \`grep\` (content) or \`find\`/\`ls\` (names).
+- \`subagent\` delegates a focused subtask (review, research, refactor) and keeps the main context clean.
+- Prefer editing existing files over creating new ones; follow project conventions for naming, formatting, and error handling.
+- Don't quote full tool output back to the user — summarize what you found and what you did.
+- When the request is ambiguous, ask one short clarifying question rather than guessing.
 
 Guidelines:
 ${guidelines}

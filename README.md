@@ -49,6 +49,7 @@ curl -fsSL https://raw.githubusercontent.com/simpletoolsindia/ai/main/install.sh
 - [Persistent memory](#persistent-memory)
 - [Sandboxed tools (context-mode)](#sandboxed-tools-context-mode)
 - [Pluggable web tools](#pluggable-web-tools)
+- [Custom OpenAI-compatible providers](#custom-openai-compatible-providers)
 - [Configuration](#configuration)
 - [Architecture](#architecture)
 - [Updating](#updating)
@@ -81,7 +82,7 @@ rm -rf ~/.ai ~/.local/bin/ai
 
 ```bash
 # Specific version / branch / commit
-curl -fsSL https://raw.githubusercontent.com/simpletoolsindia/ai/main/install.sh | bash -s -- --ref v0.79.0
+curl -fsSL https://raw.githubusercontent.com/simpletoolsindia/ai/main/install.sh | bash -s -- --ref v0.79.2
 
 # Local checkout (for development)
 git clone https://github.com/simpletoolsindia/ai.git
@@ -119,7 +120,7 @@ In interactive mode you can:
 | Command | Action |
 |---|---|
 | `/model` | pick a model (fuzzy search, recent, scoped) |
-| `/login` | OAuth / API key login for a cloud provider |
+| `/login` | OAuth / API key login for a cloud provider, or add a custom OpenAI-compatible endpoint |
 | `/searcheng` | view or update the SearXNG endpoint used by `websearch` |
 | `/scout-stack-auto` | run all configured subagents in parallel |
 | `/scout-backend` `/scout-db` `/scout-frontend` | run a specific domain scout |
@@ -129,6 +130,15 @@ In interactive mode you can:
 | `/subagent` | spawn a subagent manually |
 | `Esc Esc` | session tree (branch / fork / resume) |
 | `Ctrl+C` | cancel the current operation |
+
+## What's new in 0.79.2
+
+The final production build. This release adds **runtime provider onboarding** (the last major workflow that used to require hand-editing `models.json`), makes auto-compaction **percentage-based and intuitive**, and tightens the system prompt so the LLM responds faster and more reliably.
+
+- **`/login` → "Add OpenAI-compatible provider"** — add Groq, Together, Fireworks, LM Studio, vLLM, or any other OpenAI-compatible endpoint *at runtime* via a 5-step dialog. No hand-editing `~/.ai/agent/models.json` required. The slash command writes the provider config to `models.json`, saves the API key to `auth.json`, refreshes the registry, and tells you the exact `--model <provider>/<id>` line to use.
+- **Auto-compact at 90% by default** — new `compaction.threshold` setting (default `0.9`). Compaction now triggers when the context reaches 90% of the model's window, not on a fixed 16K-reserve heuristic. Set `compaction.threshold = 0` to restore the old reserve-token behavior; `compaction.enabled = false` disables it entirely. Unknown context windows defer to the existing overflow safety net.
+- **Optimized system prompt** — 17% shorter, all rules preserved. Adds a compact **Tool usage** section (when to use `read` vs `grep`/`find`/`ls`, when to delegate to `subagent`, prefer editing existing files, summarize tool output, ask one clarifying question when ambiguous) and a one-liner about the **agent loop** so the model knows it can iterate. The docs section is now 5 lines instead of 7, with all 10 topic cross-references intact.
+- **Drive-by cleanup** — extracted the 70-line `convertToLlmWithBlockImages` closure from `sdk.ts` into its own `core/image-block-filter.ts` module. No behavior change.
 
 ## What's new in 0.79.1
 
@@ -343,6 +353,71 @@ $ ai -p "Fetch https://www.rfc-editor.org/rfc/rfc2616.txt and tell me the file p
 ```
 
 Localhost and private IPs are not blocked by default. Only fetch URLs you trust.
+
+## Custom OpenAI-compatible providers
+
+Any endpoint that speaks the OpenAI `/v1/chat/completions` API can be added at runtime — no need to hand-edit `~/.ai/agent/models.json`. Groq, Together, Fireworks, OpenRouter, LM Studio, vLLM, llama.cpp's server, LocalAI, etc. all work.
+
+In interactive mode:
+
+```
+> /login
+> Select authentication method: Add OpenAI-compatible provider
+> Provider name: my-groq
+> Base URL:      https://api.groq.com/openai/v1
+> API key:       gsk_...
+> Model ID:      llama-3.1-70b-versatile
+> Display name:  Llama 3.1 70B (Groq)
+✓ Added provider "my-groq". Use /model to pick "my-groq/llama-3.1-70b-versatile",
+  or run: ai -p "..." --model my-groq/llama-3.1-70b-versatile
+```
+
+The new model is **immediately selectable** — the registry is refreshed in-memory. The provider is written to `~/.ai/agent/models.json`:
+
+```json
+{
+  "providers": {
+    "my-groq": {
+      "baseUrl": "https://api.groq.com/openai/v1",
+      "api": "openai-completions",
+      "apiKey": "gsk_...",
+      "models": [
+        { "id": "llama-3.1-70b-versatile", "name": "Llama 3.1 70B (Groq)" }
+      ]
+    }
+  }
+}
+```
+
+The API key is also written to `~/.ai/agent/auth.json` (the secure store used by the `/login` flow for built-in providers).
+
+### Programmatic / scripted add
+
+If you don't want to use the TUI, you can call the same API from a script:
+
+```js
+import { ModelRegistry, AuthStorage } from "@simpletoolsindiaorg/ai-coding-agent";
+
+const registry = ModelRegistry.create(
+  AuthStorage.create("~/.ai/agent/auth.json"),
+  "~/.ai/agent/models.json",
+);
+
+registry.addOpenAICompatibleProvider({
+  name: "my-groq",
+  baseUrl: "https://api.groq.com/openai/v1",
+  apiKey: process.env.GROQ_API_KEY!,
+  modelId: "llama-3.1-70b-versatile",
+  modelName: "Llama 3.1 70B (Groq)",
+});
+```
+
+Validation:
+
+- Provider name must match `[a-zA-Z0-9_-]+` (no slashes, spaces, or punctuation)
+- Provider name must not collide with a built-in (anthropic, openai, groq, etc.) — the slash command suggests an alternative
+- `baseUrl` must be a valid `http://` or `https://` URL
+- Refuses to clobber a malformed existing `models.json` (you'll see the original parse error)
 
 ## Configuration
 

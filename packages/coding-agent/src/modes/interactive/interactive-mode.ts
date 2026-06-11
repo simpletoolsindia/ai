@@ -4714,14 +4714,19 @@ export class InteractiveMode {
 	private showLoginAuthTypeSelector(): void {
 		const subscriptionLabel = "Use a subscription";
 		const apiKeyLabel = "Use an API key";
+		const customProviderLabel = "Add OpenAI-compatible provider";
 		this.showSelector((done) => {
 			const selector = new ExtensionSelectorComponent(
 				"Select authentication method:",
-				[subscriptionLabel, apiKeyLabel],
+				[subscriptionLabel, apiKeyLabel, customProviderLabel],
 				(option) => {
 					done();
-					const authType = option === subscriptionLabel ? "oauth" : "api_key";
-					this.showLoginProviderSelector(authType);
+					if (option === customProviderLabel) {
+						void this.handleAddOpenAICompatibleProvider();
+					} else {
+						const authType = option === subscriptionLabel ? "oauth" : "api_key";
+						this.showLoginProviderSelector(authType);
+					}
 				},
 				() => {
 					done();
@@ -4730,6 +4735,108 @@ export class InteractiveMode {
 			);
 			return { component: selector, focus: selector };
 		});
+	}
+
+	/**
+	 * `/login` → "Add OpenAI-compatible provider"
+	 *
+	 * Multi-step dialog that collects:
+	 *   1. Provider name (e.g., "groq", "my-llm")
+	 *   2. Base URL (e.g., "https://api.groq.com/openai/v1")
+	 *   3. API key
+	 *   4. Model ID (e.g., "llama-3.1-70b-versatile")
+	 *   5. Optional human-readable model name
+	 *
+	 * Then calls `ModelRegistry.addOpenAICompatibleProvider()` which
+	 * writes `models.json` and `auth.json` and refreshes the registry
+	 * so the new model is immediately selectable in the model picker
+	 * (or via `--model <provider>/<modelId>`).
+	 */
+	private async handleAddOpenAICompatibleProvider(): Promise<void> {
+		const dialog = new LoginDialogComponent(
+			this.ui,
+			"openai-compatible",
+			(_success, _message) => {
+				// Completion handled below
+			},
+			"OpenAI-compatible",
+			"Add OpenAI-compatible provider",
+		);
+
+		this.editorContainer.clear();
+		this.editorContainer.addChild(dialog);
+		this.ui.setFocus(dialog);
+		this.ui.requestRender();
+
+		const restoreEditor = () => {
+			this.editorContainer.clear();
+			this.editorContainer.addChild(this.editor);
+			this.ui.setFocus(this.editor);
+			this.ui.requestRender();
+		};
+
+		try {
+			// Step 1: provider name
+			const name = (
+				await dialog.showPrompt(
+					"Provider name (used as `<name>/<modelId>`). Letters, digits, hyphens, underscores only:",
+					"my-llm",
+				)
+			).trim();
+			if (!name) throw new Error("Provider name is required");
+
+			// Step 2: base URL
+			const baseUrl = (
+				await dialog.showPrompt(
+					"OpenAI-compatible base URL (must include scheme, e.g. https://api.example.com/v1):",
+					"https://api.example.com/v1",
+				)
+			).trim();
+			if (!baseUrl) throw new Error("Base URL is required");
+
+			// Step 3: API key
+			const apiKey = (await dialog.showPrompt("API key:", "sk-...")).trim();
+			if (!apiKey) throw new Error("API key is required");
+
+			// Step 4: model ID
+			const modelId = (
+				await dialog.showPrompt(
+					"Model ID (the exact model name your provider expects):",
+					"model-name",
+				)
+			).trim();
+			if (!modelId) throw new Error("Model ID is required");
+
+			// Step 5: optional human-readable name
+			const modelNameRaw = (
+				await dialog.showPrompt(
+					"Human-readable model name (optional — press Enter to use the model ID):",
+					modelId,
+				)
+			).trim();
+
+			// Persist + refresh
+			const result = this.session.modelRegistry.addOpenAICompatibleProvider({
+				name,
+				baseUrl,
+				apiKey,
+				modelId,
+				modelName: modelNameRaw || undefined,
+			});
+
+			restoreEditor();
+			this.showStatus(
+				`\u2713 Added provider "${result.providerId}". ` +
+					`Use /model to pick "${result.providerId}/${result.modelId}", ` +
+					`or run: ai -p "..." --model ${result.providerId}/${result.modelId}`,
+			);
+		} catch (error: unknown) {
+			restoreEditor();
+			const errorMsg = error instanceof Error ? error.message : String(error);
+			if (errorMsg !== "Login cancelled") {
+				this.showError(`Failed to add OpenAI-compatible provider: ${errorMsg}`);
+			}
+		}
 	}
 
 	private showLoginProviderSelector(authType: "oauth" | "api_key"): void {

@@ -116,12 +116,23 @@ export interface CompactionSettings {
 	enabled: boolean;
 	reserveTokens: number;
 	keepRecentTokens: number;
+	/**
+	 * Fraction of the context window at which auto-compaction should
+	 * trigger. 0.90 means "compact when context usage reaches 90%".
+	 *
+	 * Applied when `contextWindow > 0` (i.e. the model has a known
+	 * context window size). Falls back to `reserveTokens` when the
+	 * window is unknown. Set to 0 to disable the threshold-based
+	 * check and use `reserveTokens` only.
+	 */
+	threshold: number;
 }
 
 export const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = {
 	enabled: true,
 	reserveTokens: 16384,
 	keepRecentTokens: 20000,
+	threshold: 0.9,
 };
 
 // ============================================================================
@@ -215,9 +226,37 @@ export function estimateContextTokens(messages: AgentMessage[]): ContextUsageEst
 
 /**
  * Check if compaction should trigger based on context usage.
+ *
+ * Two triggers, applied in order:
+ *  1. **Threshold** (preferred when `contextWindow > 0`): compacts when
+ *     `contextTokens / contextWindow >= settings.threshold`. Default
+ *     threshold is 0.90 (90%).
+ *  2. **Reserve tokens** (fallback when `contextWindow` is unknown):
+ *     compacts when `contextTokens > contextWindow - settings.reserveTokens`.
+ *     Default reserve is 16K tokens.
+ *
+ * If `settings.threshold` is 0, the threshold check is skipped and only
+ * the reserve-tokens check applies. If `contextWindow` is 0 (unknown),
+ * neither check applies — return `false` and let the overflow path
+ * (`isContextOverflow`) handle the trigger.
  */
 export function shouldCompact(contextTokens: number, contextWindow: number, settings: CompactionSettings): boolean {
 	if (!settings.enabled) return false;
+
+	// Threshold-based: only applies when both the threshold is set and
+	// we know the model's context window. This is the more intuitive
+	// "compact at 90% full" check.
+	if (settings.threshold > 0) {
+		if (contextWindow <= 0) {
+			// Unknown window; can't compute a ratio. Defer to overflow check.
+			return false;
+		}
+		const ratio = contextTokens / contextWindow;
+		return ratio >= settings.threshold;
+	}
+
+	// Reserve-tokens fallback: only meaningful when we know the window.
+	if (contextWindow <= 0) return false;
 	return contextTokens > contextWindow - settings.reserveTokens;
 }
 

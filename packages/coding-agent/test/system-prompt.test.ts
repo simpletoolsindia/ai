@@ -53,9 +53,8 @@ describe("buildSystemPrompt", () => {
 				cwd: process.cwd(),
 			});
 
-			expect(prompt).toContain(
-				"- When reading pi docs or examples, resolve docs/... under Additional docs and examples/... under Examples, not the current working directory",
-			);
+			// Optimized wording (was: "When reading pi docs or examples, resolve docs/... under Additional docs and examples/... under Examples, not the current working directory")
+			expect(prompt).toContain("resolve paths under these dirs, not the cwd");
 		});
 	});
 

@@ -10,6 +10,12 @@ export interface CompactionSettings {
 	enabled?: boolean; // default: true
 	reserveTokens?: number; // default: 16384
 	keepRecentTokens?: number; // default: 20000
+	/**
+	 * Fraction of the context window at which auto-compaction triggers.
+	 * 0.90 means "compact when 90% full". Default: 0.90.
+	 * Set to 0 to use reserveTokens only.
+	 */
+	threshold?: number;
 }
 
 export interface BranchSummarySettings {
@@ -758,11 +764,40 @@ export class SettingsManager {
 		return this.settings.compaction?.keepRecentTokens ?? 20000;
 	}
 
-	getCompactionSettings(): { enabled: boolean; reserveTokens: number; keepRecentTokens: number } {
+	/**
+	 * Fraction of the context window at which auto-compaction triggers.
+	 * 0 < threshold ≤ 1. Default: 0.90 (compact when 90% full).
+	 * Set to 0 to disable the threshold check and fall back to reserveTokens.
+	 */
+	getCompactionThreshold(): number {
+		const t = this.settings.compaction?.threshold;
+		if (t === undefined || t === null) return 0.9;
+		// Clamp to valid range. 0 is allowed (= disabled); negatives are not.
+		if (t < 0) return 0;
+		if (t > 1) return 1;
+		return t;
+	}
+
+	setCompactionThreshold(threshold: number): void {
+		if (!this.globalSettings.compaction) {
+			this.globalSettings.compaction = {};
+		}
+		this.globalSettings.compaction.threshold = threshold;
+		this.markModified("compaction", "threshold");
+		this.save();
+	}
+
+	getCompactionSettings(): {
+		enabled: boolean;
+		reserveTokens: number;
+		keepRecentTokens: number;
+		threshold: number;
+	} {
 		return {
 			enabled: this.getCompactionEnabled(),
 			reserveTokens: this.getCompactionReserveTokens(),
 			keepRecentTokens: this.getCompactionKeepRecentTokens(),
+			threshold: this.getCompactionThreshold(),
 		};
 	}
 

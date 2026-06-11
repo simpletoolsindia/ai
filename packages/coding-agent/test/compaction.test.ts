@@ -230,6 +230,7 @@ describe("shouldCompact", () => {
 			enabled: true,
 			reserveTokens: 10000,
 			keepRecentTokens: 20000,
+			threshold: 0.9,
 		};
 
 		expect(shouldCompact(95000, 100000, settings)).toBe(true);
@@ -241,9 +242,79 @@ describe("shouldCompact", () => {
 			enabled: false,
 			reserveTokens: 10000,
 			keepRecentTokens: 20000,
+			threshold: 0.9,
 		};
 
 		expect(shouldCompact(95000, 100000, settings)).toBe(false);
+	});
+
+	it("compacts at 90% by default (threshold = 0.9)", () => {
+		const settings: CompactionSettings = {
+			enabled: true,
+			reserveTokens: 16384,
+			keepRecentTokens: 20000,
+			threshold: 0.9,
+		};
+		// 128K context window, 90% threshold = compact at 115.2K used
+		expect(shouldCompact(115_200, 128_000, settings)).toBe(true);
+		expect(shouldCompact(115_000, 128_000, settings)).toBe(false);
+	});
+
+	it("honors custom thresholds", () => {
+		const settings75: CompactionSettings = {
+			enabled: true,
+			reserveTokens: 16384,
+			keepRecentTokens: 20000,
+			threshold: 0.75,
+		};
+		// 75% threshold: compact at 75K of 100K
+		expect(shouldCompact(75_000, 100_000, settings75)).toBe(true);
+		expect(shouldCompact(74_999, 100_000, settings75)).toBe(false);
+
+		const settings50: CompactionSettings = {
+			enabled: true,
+			reserveTokens: 16384,
+			keepRecentTokens: 20000,
+			threshold: 0.5,
+		};
+		expect(shouldCompact(50_000, 100_000, settings50)).toBe(true);
+		expect(shouldCompact(49_999, 100_000, settings50)).toBe(false);
+	});
+
+	it("falls back to reserveTokens when contextWindow is 0 (returns false; overflow check is the safety net)", () => {
+		const settings: CompactionSettings = {
+			enabled: true,
+			reserveTokens: 10_000,
+			keepRecentTokens: 20_000,
+			threshold: 0.9,
+		};
+		// contextWindow = 0 (unknown) → return false, let overflow check handle it
+		expect(shouldCompact(5_000, 0, settings)).toBe(false);
+		expect(shouldCompact(15_000, 0, settings)).toBe(false);
+		expect(shouldCompact(99_999_999, 0, settings)).toBe(false);
+	});
+
+	it("threshold = 0 disables the percentage check and uses reserveTokens only", () => {
+		const settings: CompactionSettings = {
+			enabled: true,
+			reserveTokens: 10_000,
+			keepRecentTokens: 20_000,
+			threshold: 0,
+		};
+		// 90K of 100K, threshold disabled → only reserveTokens check
+		// 100K - 10K = 90K threshold for reserve
+		expect(shouldCompact(89_000, 100_000, settings)).toBe(false);
+		expect(shouldCompact(91_000, 100_000, settings)).toBe(true);
+	});
+
+	it("threshold = 0 with unknown contextWindow returns false", () => {
+		const settings: CompactionSettings = {
+			enabled: true,
+			reserveTokens: 10_000,
+			keepRecentTokens: 20_000,
+			threshold: 0,
+		};
+		expect(shouldCompact(100_000, 0, settings)).toBe(false);
 	});
 });
 

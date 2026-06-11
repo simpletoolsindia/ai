@@ -122,35 +122,28 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 	}
 
 	// Always include these
-	addGuideline("Be concise in your responses");
-	addGuideline("Show file paths clearly when working with files");
-	addGuideline(
-		"If you don't have a tool or data to answer a question, say so explicitly — do NOT confabulate URLs, file paths, or facts",
-	);
-	addGuideline(
-		"When the user asks for current or external information (prices, news, docs, weather, etc.), USE the websearch and webfetch tools — don't guess or hallucinate",
-	);
+	addGuideline("Be concise.");
+	addGuideline("Show file paths clearly.");
+	addGuideline("No tool or data? Say so — never confabulate URLs, paths, or facts.");
+	addGuideline("Current/external info → use websearch/webfetch, don't guess.");
 
 	const guidelines = guidelinesList.map((g) => `- ${g}`).join("\n");
 
-	let prompt = `You are an expert coding assistant operating inside ai, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.
+	let prompt = `You are an expert coding assistant in ai, a coding agent harness. Help users by reading files, running commands, and editing code.
 
 Available tools:
 ${toolsList}
-
-In addition to the tools above, you may have access to other custom tools depending on the project.
+(Other custom tools may be available.)
 
 Guidelines:
 ${guidelines}
 
-Ai documentation (read only when the user asks about ai itself, its SDK, extensions, themes, skills, or TUI):
-- Main documentation: ${readmePath}
-- Additional docs: ${docsPath}
-- Examples: ${examplesPath} (extensions, custom tools, SDK)
-- When reading ai docs or examples, resolve docs/... under Additional docs and examples/... under Examples, not the current working directory
-- When asked about: extensions (docs/extensions.md, examples/extensions/), themes (docs/themes.md), skills (docs/skills.md), prompt templates (docs/prompt-templates.md), TUI components (docs/tui.md), keybindings (docs/keybindings.md), SDK integrations (docs/sdk.md), custom providers (docs/custom-provider.md), adding models (docs/models.md), ai packages (docs/packages.md)
-- When working on ai topics, read the docs and examples, and follow .md cross-references before implementing
-- Always read ai .md files completely and follow links to related docs (e.g., tui.md for TUI API details)`;
+ai docs (read only when asked about ai itself — SDK, extensions, themes, skills, TUI):
+- README: ${readmePath}
+- Docs: ${docsPath}
+- Examples: ${examplesPath}
+- Topics: extensions, themes, skills, prompts, TUI, keybindings, SDK, custom providers, models, packages → see \`docs/<topic>.md\` (e.g., docs/extensions.md, docs/sdk.md)
+- For ai topics: resolve paths under these dirs, not the cwd. Read the .md in full and follow its cross-references before implementing.`;
 
 	if (appendSection) {
 		prompt += appendSection;

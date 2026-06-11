@@ -962,7 +962,7 @@ describe("InteractiveMode.showLoadedResources", () => {
 		});
 
 		const output = renderAll(fakeThis.chatContainer);
-		expect(output).toContain("[Skill conflicts]");
+		expect(output).toContain("[Skill notes]");
 		expect(output).not.toContain("[Skills]");
 	});
 });

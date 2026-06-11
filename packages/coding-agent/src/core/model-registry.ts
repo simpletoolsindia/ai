@@ -19,8 +19,8 @@ import {
 	type SimpleStreamOptions,
 } from "@simpletoolsindiaorg/ai-provider";
 import { registerOAuthProvider, resetOAuthProviders } from "@simpletoolsindiaorg/ai-provider/oauth";
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { dirname, join } from "path";
 import { type Static, Type } from "typebox";
 import { Compile } from "typebox/compile";
 import type { TLocalizedValidationError } from "typebox/error";
@@ -531,6 +531,135 @@ export class ModelRegistry {
 	 */
 	getError(): string | undefined {
 		return this.loadError;
+	}
+
+	/**
+	 * Add a custom OpenAI-compatible provider at runtime.
+	 *
+	 * This is the runtime path used by the `/login` "Add OpenAI-compatible
+	 * provider" slash-command option. It writes the new provider's config
+	 * to `models.json` and the API key to `auth.json`, then refreshes
+	 * the in-memory registry so the new model is immediately selectable.
+	 *
+	 * If the provider name already exists in `models.json`, its model
+	 * list is replaced (not merged).
+	 *
+	 * @param options.name      Provider name (e.g., "groq", "my-llm").
+	 *                          Must be unique across built-in providers.
+	 * @param options.baseUrl   OpenAI-compatible base URL (e.g.,
+	 *                          "https://api.groq.com/openai/v1"). Must
+	 *                          use http:// or https://.
+	 * @param options.apiKey    API key for the provider. Stored in
+	 *                          `auth.json` (the secure store).
+	 * @param options.modelId   Model ID (e.g., "llama-3.1-70b-versatile").
+	 * @param options.modelName Optional human-readable model name. Defaults
+	 *                          to `modelId`.
+	 *
+	 * @returns The full model id in `<provider>/<modelId>` form.
+	 * @throws Error on invalid input, missing models.json path, or
+	 *         provider-name conflicts with built-in providers.
+	 */
+	addOpenAICompatibleProvider(options: {
+		name: string;
+		baseUrl: string;
+		apiKey: string;
+		modelId: string;
+		modelName?: string;
+	}): { providerId: string; modelId: string } {
+		// ---- Validate input ----
+		const name = options.name?.trim() ?? "";
+		const baseUrl = options.baseUrl?.trim() ?? "";
+		const apiKey = options.apiKey?.trim() ?? "";
+		const modelId = options.modelId?.trim() ?? "";
+		const modelName = options.modelName?.trim() || modelId;
+
+		if (!name) throw new Error("Provider name is required");
+		if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+			throw new Error(
+				`Invalid provider name "${name}". Use only letters, digits, hyphens, and underscores (no spaces or slashes).`,
+			);
+		}
+		if (!baseUrl) throw new Error("Base URL is required");
+		let parsedUrl: URL;
+		try {
+			parsedUrl = new URL(baseUrl);
+		} catch {
+			throw new Error(`Invalid base URL "${baseUrl}". Include the scheme (e.g., https://...).`);
+		}
+		if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+			throw new Error(`Invalid protocol "${parsedUrl.protocol}". Use http:// or https://`);
+		}
+		if (!apiKey) throw new Error("API key is required");
+		if (!modelId) throw new Error("Model ID is required");
+
+		// ---- Reject built-in provider names ----
+		const builtIn = new Set<string>(getProviders());
+		if (builtIn.has(name)) {
+			throw new Error(
+				`"${name}" is a built-in provider. Choose a different name (e.g., "${name}-custom" or "${name}-proxy").`,
+			);
+		}
+
+		// ---- Reject if no models.json path is set ----
+		if (!this.modelsJsonPath) {
+			throw new Error(
+				"Cannot add a custom provider: this session was started without a models.json path. Use the SDK or check your agentDir.",
+			);
+		}
+
+		// ---- Read existing models.json (or start fresh) ----
+		let config: { providers?: Record<string, Record<string, unknown>> } = {};
+		try {
+			if (existsSync(this.modelsJsonPath)) {
+				const content = readFileSync(this.modelsJsonPath, "utf-8");
+				const parsed = JSON.parse(content);
+				if (parsed && typeof parsed === "object") {
+					config = parsed as { providers?: Record<string, Record<string, unknown>> };
+				}
+			}
+		} catch (err) {
+			// Either the file is unreadable or the JSON is malformed.
+			// Refuse to clobber a non-empty file: surface the error.
+			if (existsSync(this.modelsJsonPath)) {
+				const msg = err instanceof Error ? err.message : String(err);
+				throw new Error(
+					`Failed to read existing models.json: ${msg}\n\nFix the file manually, or delete it and re-run this command.`,
+				);
+			}
+		}
+		if (!config.providers) {
+			config.providers = {};
+		}
+
+		// ---- Upsert the provider entry ----
+		// Note: we write the apiKey to models.json because the schema
+		// validator requires either `apiKey` or `optionalApiKey: true`
+		// when defining custom models. We ALSO write to auth.json for
+		// consistency with the `/login` flow (the secure store is the
+		// single source of truth; models.json is the schema-required copy).
+		config.providers[name] = {
+			baseUrl,
+			api: "openai-completions",
+			apiKey,
+			models: [
+				{
+					id: modelId,
+					name: modelName,
+				},
+			],
+		};
+
+		// ---- Write models.json ----
+		mkdirSync(dirname(this.modelsJsonPath), { recursive: true });
+		writeFileSync(this.modelsJsonPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+
+		// ---- Save API key to auth.json ----
+		this.authStorage.set(name, { type: "api_key", key: apiKey });
+
+		// ---- Refresh in-memory state so the new model is selectable ----
+		this.refresh();
+
+		return { providerId: name, modelId };
 	}
 
 	private loadModels(): void {

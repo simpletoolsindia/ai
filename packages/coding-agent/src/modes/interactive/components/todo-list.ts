@@ -27,9 +27,9 @@ import { theme as defaultTheme } from "../theme/theme.ts";
 export type TodoInvalidator = () => void;
 
 const STATUS_GLYPHS: Record<TodoItem["status"], string> = {
-	pending: "[ ]",
-	in_progress: "[~]",
-	completed: "[x]",
+	pending: "○",
+	in_progress: "◉",
+	completed: "●",
 };
 
 const STATUS_COLORS: Record<TodoItem["status"], "muted" | "warning" | "success"> = {
@@ -173,14 +173,18 @@ export class TodoListComponent extends Container {
 		}
 		this.addChild(new Text(`  ${headerParts.join(" ")}`, 0, 0));
 
-		// Progress bar
+		// Progress bar with pulse animation indicator when work is active
 		const pct = total === 0 ? 0 : Math.round((completed / total) * 20);
 		const filled = "█".repeat(pct);
 		const empty = "░".repeat(20 - pct);
 		const barColor = inProgress > 0 ? "warning" : completed === total ? "success" : "muted";
+		// Pulse indicator: show a spinning character next to the bar when work is happening
+		const pulseChars = ["◐", "◓", "◑", "◒"];
+		const pulseIdx = Math.floor(Date.now() / 400) % pulseChars.length;
+		const pulse = inProgress > 0 ? defaultTheme.fg("warning", ` ${pulseChars[pulseIdx]}`) : "";
 		this.addChild(
 			new Text(
-				`  ${defaultTheme.fg(barColor, filled + empty)} ${defaultTheme.fg(
+				`  ${defaultTheme.fg(barColor, filled + empty)}${pulse} ${defaultTheme.fg(
 					"dim",
 					`${Math.round((completed / total) * 100)}%`,
 				)}`,

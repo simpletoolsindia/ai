@@ -251,11 +251,14 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const defaultActiveToolNames: ToolName[] = [
 		"read",
 		"bash",
+		"grep",
+		"find",
 		"edit",
 		"write",
 		"todo",
 		"websearch",
 		"webfetch",
+		"subagent",
 	];
 	const allowedToolNames = options.tools ?? (options.noTools === "all" ? [] : undefined);
 	const excludedToolNames = options.excludeTools;

@@ -3022,12 +3022,17 @@ export class InteractiveMode {
 					this.pendingTools.set(event.toolCallId, component);
 				}
 				component.markExecutionStarted();
-				// The tool is actually running now (not just being prepared).
+				// The tool is actually running now — show which tool
 				this.setDynamicWorkingMessage("executing");
+				this.workingMessage = `⚡ ${event.toolName} → executing`;
+				if (this.loadingAnimation) {
+					this.loadingAnimation.setMessage(
+						`${this.workingMessage} (${keyText("app.interrupt")} to interrupt)`,
+					);
+				}
 				// Update footer with current tool info
 				this.footerDataProvider.setCurrentTool(event.toolName);
 				this.footerDataProvider.setCurrentProcess("executing");
-				this.footer.invalidate();
 				this.ui.requestRender();
 				break;
 			}
@@ -3049,10 +3054,10 @@ export class InteractiveMode {
 					// Tool is done; the model will receive the result and
 					// continue. Show "Working..." to reflect that.
 					this.setDynamicWorkingMessage("working");
+					this.workingMessage = undefined; // clear tool-specific message
 					// Clear tool status from footer
 					this.footerDataProvider.setCurrentTool(null);
 					this.footerDataProvider.setCurrentProcess(null);
-					this.footer.invalidate();
 					this.ui.requestRender();
 				}
 				break;

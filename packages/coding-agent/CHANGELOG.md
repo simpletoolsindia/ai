@@ -2,7 +2,7 @@
 
 > **Fork notice:** This is the changelog for **ai**, a fork of [pi](https://github.com/earendil-works/pi). Entries up to and including v0.78.1 are inherited verbatim from the upstream pi project. Starting with the first ai release, new entries are added by this fork. See [NOTICE.md](https://github.com/simpletoolsindiaorg/ai/blob/main/NOTICE.md) for the full fork attribution.
 
-## [0.80.0] - 2026-06-11
+## [0.80.1] - 2026-06-11
 
 Verification loop, dynamic role-based skills, MCP server integration, and performance hardening. This is the first release that validates its own output before ending a turn.
 

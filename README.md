@@ -25,7 +25,7 @@ curl -fsSL https://raw.githubusercontent.com/simpletoolsindia/ai/main/install.sh
 `ai` is a terminal-native coding agent that reads your project, edits files, runs shell commands, and queries the web — all in a single agent loop, with full session history you can replay, branch, fork, and resume. Pluggable models (Ollama, Anthropic, OpenAI, Bedrock, Groq, …). Persistent memory across sessions. Sandboxed tools. PLAN/EXECUTE modes for safe exploration. Web search and fetch built in. **No SaaS, no cloud relay, no data leaving your machine unless you ask.**
 
 ```
-  █████   ██╗     ai v0.79.8
+  █████   ██╗     ai v0.80.1
  ██╔══██  ██║     a coding agent for the terminal
  ███████  ██║     reads, runs, writes, remembers
  ██╔══██  ██║     self-extensible · 20+ providers

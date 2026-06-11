@@ -1155,7 +1155,7 @@ export class SettingsManager {
 		// The user switches to EXECUTE per-session via Tab or /mode.
 		// This prevents the agent from accidentally writing files on
 		// first launch after a previous session used EXECUTE.
-		return "plan";
+		return this.globalSettings.agentMode ?? "plan";
 	}
 
 	setAgentMode(mode: "plan" | "execute"): void {

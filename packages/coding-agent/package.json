@@ -1,6 +1,6 @@
 {
   "name": "@simpletoolsindiaorg/ai-coding-agent",
-  "version": "0.84.0",
+  "version": "0.84.1",
   "description": "Coding agent CLI with read, bash, edit, write tools and session management",
   "type": "module",
   "aiConfig": {
@@ -36,9 +36,9 @@
     "prepublishOnly": "npm run clean && npm run build && npm run shrinkwrap"
   },
   "dependencies": {
-    "@simpletoolsindiaorg/ai-agent": "^0.84.0",
-    "@simpletoolsindiaorg/ai-provider": "^0.84.0",
-    "@simpletoolsindiaorg/ai-tui": "^0.84.0",
+    "@simpletoolsindiaorg/ai-agent": "^0.84.1",
+    "@simpletoolsindiaorg/ai-provider": "^0.84.1",
+    "@simpletoolsindiaorg/ai-tui": "^0.84.1",
     "@silvia-odwyer/photon-node": "0.3.4",
     "@mixmark-io/domino": "2.2.0",
     "better-sqlite3": "12.9.0",

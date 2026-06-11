@@ -519,6 +519,9 @@ export class ModelRegistry {
 		resetApiProviders();
 		resetOAuthProviders();
 
+		// Auto-recover models.json from auth.json if it was deleted (e.g., reinstall)
+		this.recoverModelsFromAuth();
+
 		this.loadModels();
 
 		for (const [providerName, config] of this.registeredProviders.entries()) {
@@ -664,6 +667,45 @@ export class ModelRegistry {
 		this.refreshDiscoveredModels().catch(() => {});
 
 		return { providerId: name, modelId };
+	}
+
+	/**
+	 * Auto-recover models.json from auth.json credentials if the file
+	 * was deleted (e.g., by reinstall). Reconstructs provider entries
+	 * for each saved API key so the user doesn't lose their /login config.
+	 */
+	private recoverModelsFromAuth(): void {
+		if (!this.modelsJsonPath) return;
+		try {
+			if (existsSync(this.modelsJsonPath)) return; // Already exists, nothing to do
+
+			const authFile = join(dirname(this.modelsJsonPath), "auth.json");
+			if (!existsSync(authFile)) return;
+
+			const auth = JSON.parse(readFileSync(authFile, "utf-8"));
+			const providers: Record<string, Record<string, unknown>> = {};
+
+			for (const [name, cred] of Object.entries(auth)) {
+				if (typeof cred !== "object" || !cred) continue;
+				const c = cred as Record<string, unknown>;
+				if (c.type === "api_key" && typeof c.key === "string") {
+					providers[name] = {
+						api: "openai-completions",
+						apiKey: c.key,
+						baseUrl: "https://api.openai.com/v1",
+						models: [{ id: "gpt-4o", name: "GPT-4o" }],
+					};
+				}
+			}
+
+			if (Object.keys(providers).length > 0) {
+				const config = { providers };
+				mkdirSync(dirname(this.modelsJsonPath), { recursive: true });
+				writeFileSync(this.modelsJsonPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+			}
+		} catch {
+			// Best-effort recovery — don't crash if something goes wrong
+		}
 	}
 
 	private loadModels(): void {

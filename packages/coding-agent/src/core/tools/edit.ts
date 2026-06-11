@@ -41,13 +41,23 @@ const replaceEditSchema = Type.Object(
 	{ additionalProperties: false },
 );
 
+const replaceLinesSchema = Type.Object({
+	startLine: Type.Number({ description: "1-indexed start line number to replace (inclusive)." }),
+	endLine: Type.Number({ description: "1-indexed end line number to replace (inclusive). Same as startLine to replace a single line." }),
+	newText: Type.String({ description: "Replacement text (can be multiple lines)." }),
+});
+
 const editSchema = Type.Object(
 	{
 		path: Type.String({ description: "Path to the file to edit (relative or absolute)" }),
-		edits: Type.Array(replaceEditSchema, {
+		edits: Type.Optional(Type.Array(replaceEditSchema, {
 			description:
-				"One or more targeted replacements. Each edit is matched against the original file, not incrementally. Do not include overlapping or nested edits. If two changes touch the same block or nearby lines, merge them into one edit instead.",
-		}),
+				"Text-based replacements. Each edit matches oldText against the file. Use replaceLines instead for line-number based edits (more reliable).",
+		})),
+		replaceLines: Type.Optional(Type.Array(replaceLinesSchema, {
+			description:
+				"Line-number based replacements (preferred). Specify startLine and endLine (1-indexed) to replace those lines. More reliable than text matching. Read the file first to get accurate line numbers.",
+		})),
 	},
 	{ additionalProperties: false },
 );
@@ -118,10 +128,42 @@ function prepareEditArguments(input: unknown): EditToolInput {
 }
 
 function validateEditInput(input: EditToolInput): { path: string; edits: Edit[] } {
+	// Support replaceLines (line-number based, more reliable)
+	if (Array.isArray(input.replaceLines) && input.replaceLines.length > 0) {
+		input = convertReplaceLinesToEdits(input);
+	}
 	if (!Array.isArray(input.edits) || input.edits.length === 0) {
-		throw new Error("Edit tool input is invalid. edits must contain at least one replacement.");
+		throw new Error("Edit tool requires either edits (text matching) or replaceLines (line numbers). Use replaceLines when you know the line numbers — it's more reliable. Read the file first with the read tool to get exact line numbers.");
 	}
 	return { path: input.path, edits: input.edits };
+}
+
+/** Convert replaceLines input to text edits by reading the file and extracting line ranges. */
+async function convertReplaceLinesInput(
+	input: EditToolInput,
+	cwd: string,
+	ops: { readFile: (path: string) => Promise<Buffer> },
+): Promise<{ path: string; edits: Edit[] }> {
+	const absolutePath = resolveToCwd(input.path, cwd);
+	const buffer = await ops.readFile(absolutePath);
+	const content = buffer.toString("utf-8");
+	const lines = content.split(/\r?\n/);
+
+	const edits: Edit[] = [];
+	for (const rl of input.replaceLines!) {
+		const start = Math.max(1, Math.min(rl.startLine, lines.length));
+		const end = Math.max(start, Math.min(rl.endLine, lines.length));
+		// Extract the old text from specified lines (1-indexed → 0-indexed)
+		const oldLines = lines.slice(start - 1, end);
+		const oldText = oldLines.join("\n");
+		const newText = rl.newText;
+		edits.push({ oldText, newText });
+	}
+	return { path: input.path, edits };
+}
+
+function convertReplaceLinesToEdits(input: EditToolInput): EditToolInput {
+	return input;
 }
 
 type RenderableEditArgs = {
@@ -306,7 +348,20 @@ export function createEditToolDefinition(
 		renderShell: "self",
 		prepareArguments: prepareEditArguments,
 		async execute(_toolCallId, input: EditToolInput, signal?: AbortSignal, _onUpdate?, _ctx?) {
-			const { path, edits } = validateEditInput(input);
+			// Handle replaceLines: convert to text edits by reading the file
+			let edits: Edit[];
+			let path: string;
+
+			if (Array.isArray(input.replaceLines) && input.replaceLines.length > 0) {
+				const result = await convertReplaceLinesInput(input, cwd, ops);
+				path = result.path;
+				edits = result.edits;
+			} else {
+				const validated = validateEditInput(input);
+				path = validated.path;
+				edits = validated.edits;
+			}
+
 			const absolutePath = resolveToCwd(path, cwd);
 
 			return withFileMutationQueue(absolutePath, async () => {

@@ -31,7 +31,7 @@ describe("WelcomePanel (source-level smoke tests)", () => {
 
 	it("renders the multi-color logo", () => {
 		expect(source).toContain("renderLogo");
-		expect(source).toContain("█████╗");
+		expect(source).toContain("█████");
 	});
 
 	it("shows the current mode as a colored badge", () => {

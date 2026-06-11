@@ -63,6 +63,16 @@ export interface WarningSettings {
 	anthropicExtraUsage?: boolean; // default: true
 }
 
+/** Settings for the verification loop that runs after agent_end. */
+export interface VerificationSettings {
+	/** Enable the verification loop. Default: true. */
+	enabled?: boolean;
+	/** Maximum number of verification-fix loops before giving up. Default: 3. */
+	maxLoops?: number;
+	/** Model to use for verification (provider/model format). Default: same as session model. */
+	model?: string;
+}
+
 export type TransportSetting = Transport;
 
 /**
@@ -124,6 +134,8 @@ export interface Settings {
 	showHardwareCursor?: boolean; // Show terminal cursor while still positioning it for IME
 	markdown?: MarkdownSettings;
 	warnings?: WarningSettings;
+	/** Verification loop — runs a verification LLM after agent_end to check correctness. */
+	verification?: VerificationSettings;
 	sessionDir?: string; // Custom session storage directory (same format as --session-dir CLI flag)
 	httpIdleTimeoutMs?: number; // HTTP header/body idle timeout in milliseconds; 0 disables it
 	websocketConnectTimeoutMs?: number; // WebSocket connect/open handshake timeout in milliseconds; 0 disables it
@@ -1207,6 +1219,16 @@ export class SettingsManager {
 
 	getWarnings(): WarningSettings {
 		return { ...(this.settings.warnings ?? {}) };
+	}
+
+	/** Get verification settings with defaults applied. */
+	getVerificationSettings(): { enabled: boolean; maxLoops: number; model?: string } {
+		const v = this.settings.verification ?? {};
+		return {
+			enabled: v.enabled ?? true,
+			maxLoops: v.maxLoops ?? 3,
+			model: v.model,
+		};
 	}
 
 	setWarnings(warnings: WarningSettings): void {

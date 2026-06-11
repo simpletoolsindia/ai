@@ -2,6 +2,43 @@
 
 > **Fork notice:** This is the changelog for **ai**, a fork of [pi](https://github.com/earendil-works/pi). Entries up to and including v0.78.1 are inherited verbatim from the upstream pi project. Starting with the first ai release, new entries are added by this fork. See [NOTICE.md](https://github.com/simpletoolsindiaorg/ai/blob/main/NOTICE.md) for the full fork attribution.
 
+## [0.80.0] - 2026-06-11
+
+Verification loop, dynamic role-based skills, MCP server integration, and performance hardening. This is the first release that validates its own output before ending a turn.
+
+### New Features
+
+- **Verification loop** — After every `agent_end`, a separate verifier LLM call checks whether the task was completed correctly. If issues are found (missing fixes, incomplete work, broken changes), the agent is fed a list of specific issues and continues working. This loop repeats (up to 3 times) until the verifier signs off. Prevents the agent from ending in a broken state.
+  - Non-streaming `completeSimple` call for speed; uses the same model by default
+  - Structured prompt with PASS/FAIL format instructions
+  - Robust parser handles unstructured responses
+  - Skipped in PLAN mode (no code was written)
+  - Configurable via `settings.verification.enabled` / `maxLoops`
+  - 16 tests in `test/verification.test.ts`
+
+- **Dynamic role-based skills** — 6 new built-in skills (dev, qa, devops, business-analyst, manager, tech-architect) with rich descriptions and detailed instructions. The agent auto-detects the relevant skill from the user's query and loads it via the `read` tool. Each skill is ~2-3 KB with specific guidelines, standards, and processes for that role.
+  - Skills stored in `~/.ai/agent/skills/<name>/SKILL.md`
+  - Each skill description contains trigger words that match domain-specific queries
+  - Tested with real loading via `loadSkills()` — the agent discovers and formats them correctly
+  - 27 tests in `test/dynamic-skills.test.ts`
+
+- **MCP server integration** — Installed and tested with `@modelcontextprotocol/server-filesystem` and `server-memory`. Full MCP protocol compliance: initialize handshake, tools/list, tools/call. The existing MCP bridge (`MCPStdioClient`) is validated end-to-end.
+  - Filesystem server: `read_file` tool tested against `/etc/hosts`
+  - Protocol compliance: JSON-RPC 2.0, newline-delimited JSON, proper error handling
+  - 7 tests in `test/mcp-integration.test.ts`
+
+### Changed
+
+- Interactive-mode now tracks `_verificationLoops` and `_verificationPending` to prevent recursive verification calls
+- Verification feedback submitted via `setImmediate` to avoid stack overflow
+- `parseVerificationResponse` improved to handle unstructured LLM responses
+
+### Added
+
+- `src/core/verification.ts` — independent module with `verifyTurnCompletion()`, `buildVerificationPrompt()`, `parseVerificationResponse()`, and extraction helpers
+- `Settings.verification` — new `VerificationSettings` with `enabled`, `maxLoops`, `model`
+- `SettingsManager.getVerificationSettings()` — returns settings with defaults applied
+
 ## [0.79.8] - 2026-06-11
 
 Polished welcome screen and tighter production polish.

@@ -124,6 +124,12 @@ import { SkillInvocationMessageComponent } from "./components/skill-invocation-m
 import { TodoListComponent } from "./components/todo-list.ts";
 import { WelcomePanel, type WelcomeInputs } from "./components/welcome.ts";
 import { ToolExecutionComponent } from "./components/tool-execution.ts";
+import {
+	extractAssistantResponse,
+	extractToolResults,
+	extractUserRequest,
+	verifyTurnCompletion,
+} from "../../core/verification.ts";
 import { TreeSelectorComponent } from "./components/tree-selector.ts";
 import { TrustSelectorComponent } from "./components/trust-selector.ts";
 import { UserMessageComponent } from "./components/user-message.ts";
@@ -3058,6 +3064,9 @@ export class InteractiveMode {
 				}
 				this.pendingTools.clear();
 
+				// Run verification loop: check if the agent completed the task correctly
+				await this.maybeRunVerificationLoop(event);
+
 				await this.checkShutdownRequested();
 
 				this.ui.requestRender();
@@ -3558,6 +3567,85 @@ export class InteractiveMode {
 	/**
 	 * Check if shutdown was requested and perform shutdown if so.
 	 */
+	/**
+	 * Run a verification LLM call after agent_end to check if the task
+	 * was completed correctly. If the verifier finds issues, they are
+	 * fed back to the agent as a follow-up message, and the agent
+	 * continues the loop. Tracks verification loop count to prevent
+	 * infinite loops. Uses deferred submission to avoid stack overflow.
+	 */
+	private async maybeRunVerificationLoop(event: { messages: import("@simpletoolsindiaorg/ai-agent").AgentMessage[] }): Promise<void> {
+		// Guard: don't run verification while a verification is already pending
+		if (this._verificationPending) return;
+
+		const vSettings = this.settingsManager.getVerificationSettings();
+		if (!vSettings.enabled) return;
+
+		// Skip verification in PLAN mode — no code was written
+		if (this.session.getMode() === "plan") return;
+
+		// Track verification loop depth
+		if (!this._verificationLoops) this._verificationLoops = 0;
+		if (this._verificationLoops >= vSettings.maxLoops) {
+			this._verificationLoops = 0;
+			return;
+		}
+
+		const model = this.session.model;
+		if (!model) return;
+
+		// Extract context from the last turn
+		const messages = event.messages as unknown as import("@simpletoolsindiaorg/ai-provider").Message[];
+		const userRequest = extractUserRequest(messages);
+		const assistantResponse = extractAssistantResponse(messages);
+		const toolResults = extractToolResults(messages);
+
+		// Skip verification if there were no substantive tool calls
+		const hasSubstantiveTools = /\[Tool:\s*(write|edit|bash)/i.test(assistantResponse);
+		if (!hasSubstantiveTools) return;
+
+		this._verificationPending = true;
+		try {
+			const result = await verifyTurnCompletion(
+				{ userRequest, assistantResponse, toolResults, isPlanMode: false },
+				{ model },
+			);
+
+			if (result.passed) {
+				this._verificationLoops = 0;
+				this._verificationPending = false;
+				return;
+			}
+
+			// Verification failed — defer feedback to prevent recursion
+			this._verificationLoops += 1;
+			const issues = result.issues.slice(0, 5).map((i) => `- ${i}`).join("\n");
+			const feedback = [
+				`🔍 Verification check #${this._verificationLoops}: The previous turn had issues that need to be fixed.`,
+				"",
+				issues,
+				"",
+				"Please fix ALL issues listed above. Update the todo list as you make progress. Continue working on the original task.",
+			].join("\n");
+
+			// Submit via setImmediate to avoid recursive agent_end → prompt → agent_end
+			this._verificationPending = false;
+			setImmediate(async () => {
+				try {
+					await this.session.prompt(feedback);
+				} catch {
+					this._verificationLoops = 0;
+				}
+			});
+		} catch {
+			this._verificationPending = false;
+			this._verificationLoops = 0;
+		}
+	}
+
+	private _verificationLoops: number = 0;
+	private _verificationPending: boolean = false;
+
 	private async checkShutdownRequested(): Promise<void> {
 		if (!this.shutdownRequested) return;
 		await this.shutdown();

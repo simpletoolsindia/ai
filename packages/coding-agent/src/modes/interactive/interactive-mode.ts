@@ -1307,10 +1307,12 @@ export class InteractiveMode {
 		for (const d of otherDiagnostics) {
 			if (d.path) {
 				const formattedPath = this.formatPathWithSource(d.path, this.findSourceInfoForPath(d.path, sourceInfos));
-				lines.push(theme.fg(d.type === "error" ? "error" : "warning", `  ${formattedPath}`));
-				lines.push(theme.fg(d.type === "error" ? "error" : "warning", `    ${d.message}`));
+				const color: ThemeColor = d.type === "error" ? "error" : d.type === "warning" ? "warning" : "muted";
+				lines.push(theme.fg(color, `  ${formattedPath}`));
+				lines.push(theme.fg(color, `    ${d.message}`));
 			} else {
-				lines.push(theme.fg(d.type === "error" ? "error" : "warning", `  ${d.message}`));
+				const color: ThemeColor = d.type === "error" ? "error" : d.type === "warning" ? "warning" : "muted";
+				lines.push(theme.fg(color, `  ${d.message}`));
 			}
 		}
 
@@ -1469,9 +1471,35 @@ export class InteractiveMode {
 		if (showDiagnostics) {
 			const skillDiagnostics = skillsResult.diagnostics;
 			if (skillDiagnostics.length > 0) {
-				const warningLines = this.formatDiagnostics(skillDiagnostics, sourceInfos);
-				this.chatContainer.addChild(new Text(`${theme.fg("warning", "[Skill conflicts]")}\n${warningLines}`, 0, 0));
-				this.chatContainer.addChild(new Spacer(1));
+				// Group diagnostics by severity so the startup help isn't
+				// dominated by advisory notes (e.g. "missing description, used
+				// heading as fallback"). Errors and conflicts stay prominent;
+				// info notes (missing description + recoverable fallback) drop
+				// to a single line at the bottom.
+				const errorsAndConflicts: typeof skillDiagnostics = [];
+				const infoNotes: typeof skillDiagnostics = [];
+				for (const d of skillDiagnostics) {
+					if (d.type === "collision" || d.type === "error") {
+						errorsAndConflicts.push(d);
+					} else {
+						infoNotes.push(d);
+					}
+				}
+
+				if (errorsAndConflicts.length > 0) {
+					const warningLines = this.formatDiagnostics(errorsAndConflicts, sourceInfos);
+					this.chatContainer.addChild(
+						new Text(`${theme.fg("warning", "[Skill conflicts]")}\n${warningLines}`, 0, 0),
+					);
+					this.chatContainer.addChild(new Spacer(1));
+				}
+				if (infoNotes.length > 0) {
+					const noteLines = this.formatDiagnostics(infoNotes, sourceInfos);
+					this.chatContainer.addChild(
+						new Text(`${theme.fg("muted", "[Skill notes]")}\n${noteLines}`, 0, 0),
+					);
+					this.chatContainer.addChild(new Spacer(1));
+				}
 			}
 
 			const promptDiagnostics = promptsResult.diagnostics;

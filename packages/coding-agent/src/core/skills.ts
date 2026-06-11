@@ -336,9 +336,12 @@ function loadSkillFromFile(
 			if (derived) {
 				description = derived;
 				descriptionWasDerived = true;
+				// Advisory: the skill still loads (with the derived
+				// description), so this is an info note rather than a
+				// warning. Users see it once at session start.
 				diagnostics.push({
-					type: "warning",
-					message: `No 'description' in frontmatter; using first heading as fallback: "${derived}"`,
+					type: "info" as const,
+					message: `No 'description' in frontmatter; using first heading as fallback: "${derived}". Add a 'description' field to the frontmatter to silence this.`,
 					path: filePath,
 				});
 			} else {

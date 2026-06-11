@@ -8,7 +8,7 @@ export interface ResourceCollision {
 }
 
 export interface ResourceDiagnostic {
-	type: "warning" | "error" | "collision";
+	type: "info" | "warning" | "error" | "collision";
 	message: string;
 	path?: string;
 	collision?: ResourceCollision;

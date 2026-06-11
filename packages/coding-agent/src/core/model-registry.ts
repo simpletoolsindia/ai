@@ -218,7 +218,7 @@ const ProviderConfigSchema = Type.Object({
 	 * Discovery is best-effort; if the server is unreachable the static
 	 * list is still available.
 	 */
-	autoDiscover: Type.Optional(Type.Union([Type.Literal("ollama")])),
+	autoDiscover: Type.Optional(Type.Union([Type.Literal("ollama"), Type.Literal("openai")])),
 });
 
 const ModelsConfigSchema = Type.Object({
@@ -262,8 +262,8 @@ interface ProviderRequestConfig {
 interface ProviderOptions {
 	/** True if the provider does not require an API key. */
 	optionalApiKey?: boolean;
-	/** Auto-discovery mode (e.g., "ollama"). */
-	autoDiscover?: "ollama";
+	/** Auto-discovery mode (e.g., "ollama", "openai"). */
+	autoDiscover?: "ollama" | "openai";
 	/** Last-known baseUrl for discovery (so it survives across refreshes). */
 	baseUrl?: string;
 }
@@ -1557,8 +1557,8 @@ export interface ProviderConfigInput {
 	 *  requests. */
 	optionalApiKey?: boolean;
 	/** Auto-discover models from the provider's local API. Currently
-	 *  supported: "ollama" — hits `<baseUrl>/api/tags` to list installed models. */
-	autoDiscover?: "ollama";
+	 *  supported: "ollama" — hits `<baseUrl>/api/tags`; "openai" — hits `<baseUrl>/v1/models`. */
+	autoDiscover?: "ollama" | "openai";
 	/** OAuth provider for /login support */
 	oauth?: Omit<OAuthProviderInterface, "id">;
 	models?: Array<{

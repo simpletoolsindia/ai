@@ -659,6 +659,10 @@ export class ModelRegistry {
 		// ---- Refresh in-memory state so the new model is selectable ----
 		this.refresh();
 
+		// Auto-discover models from the new provider immediately so
+		// they show up in /model without requiring a restart.
+		this.refreshDiscoveredModels().catch(() => {});
+
 		return { providerId: name, modelId };
 	}
 
@@ -968,33 +972,41 @@ export class ModelRegistry {
 
 	private async fetchOllamaModels(provider: string): Promise<Model<Api>[]> {
 		const options = this.providerOptions.get(provider);
-		if (!options || options.autoDiscover !== "ollama") return [];
+		if (!options?.autoDiscover || !options.baseUrl) return [];
+
 		const baseUrl = options.baseUrl;
-		if (!baseUrl) return [];
-
-		// Ollama's /api/tags lives at the host root, not under /v1.
-		// E.g. http://localhost:11434/v1 -> http://localhost:11434/api/tags
-		const ollamaTagsUrl = baseUrl.replace(/\/v1\/?$/, "") + "/api/tags";
-
 		const providerConfig = this.providerRequestConfigs.get(provider);
 		const apiKey = providerConfig?.apiKey
 			? resolveConfigValueUncached(providerConfig.apiKey)
 			: undefined;
-
-		const headers: Record<string, string> = {
-			Accept: "application/json",
-		};
-		if (apiKey) {
-			headers.Authorization = `Bearer ${apiKey}`;
-		}
+		const headers: Record<string, string> = { Accept: "application/json" };
+		if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 
 		const previous = this.ollamaDiscoveryCache.get(provider)?.models;
 
+		let url: string;
+		let extractNames: (body: unknown) => string[];
+
+		if (options.autoDiscover === "ollama") {
+			url = baseUrl.replace(/\/v1\/?$/, "") + "/api/tags";
+			extractNames = (body) => {
+				const tags = (body as { models?: Array<{ name: string }> }).models;
+				return Array.isArray(tags) ? tags.filter((t) => t?.name).map((t) => t.name) : [];
+			};
+		} else if (options.autoDiscover === "openai") {
+			url = baseUrl.replace(/\/+$/, "") + "/models";
+			extractNames = (body) => {
+				const data = (body as { data?: Array<{ id: string }> }).data;
+				return Array.isArray(data) ? data.filter((d) => d?.id).map((d) => d.id) : [];
+			};
+		} else {
+			return [];
+		}
+
 		let response: Response;
 		try {
-			response = await fetch(ollamaTagsUrl, { method: "GET", headers, signal: AbortSignal.timeout(5000) });
+			response = await fetch(url, { method: "GET", headers, signal: AbortSignal.timeout(5000) });
 		} catch {
-			// Network error or timeout: keep whatever we have cached.
 			return previous ?? [];
 		}
 		if (!response.ok) {
@@ -1008,31 +1020,22 @@ export class ModelRegistry {
 			return previous ?? [];
 		}
 
-		const tags = (body as { models?: Array<{ name: string }> }).models;
-		if (!Array.isArray(tags)) {
-			return previous ?? [];
-		}
+		const names = extractNames(body);
+		const models: Model<Api>[] = names.map((name) => ({
+			id: name,
+			name,
+			api: "openai-completions" as const,
+			provider,
+			baseUrl,
+			reasoning: false,
+			input: ["text"] as ("text" | "image")[],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 128000,
+			maxTokens: 16384,
+			headers: undefined,
+			compat: undefined,
+		}));
 
-		// Build a model entry for each tag. Defaults are conservative for
-		// local models; users can override with modelOverrides in models.json.
-		const models: Model<Api>[] = tags
-			.filter((t) => t && typeof t.name === "string" && t.name.length > 0)
-			.map((t) => ({
-				id: t.name,
-				name: t.name,
-				api: "openai-completions" as const,
-				provider,
-				baseUrl,
-				reasoning: false,
-				input: ["text"] as ("text" | "image")[],
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-				contextWindow: 128000,
-				maxTokens: 16384,
-				headers: undefined,
-				compat: undefined,
-			}));
-
-		// Apply modelOverrides if any.
 		const overrides = this.loadModelOverridesForProvider(provider);
 		if (overrides) {
 			for (let i = 0; i < models.length; i++) {

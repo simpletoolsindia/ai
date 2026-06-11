@@ -149,7 +149,7 @@ export interface Settings {
 	/** Turn-level timeouts to prevent endless loops. */
 	timeout?: TimeoutSettings;
 	sessionDir?: string; // Custom session storage directory (same format as --session-dir CLI flag)
-	HTTPIdleTimeoutMs?: number; // HTTP header/body idle timeout in milliseconds; 0 disables it
+	httpIdleTimeoutMs?: number; // HTTP header/body idle timeout in milliseconds; 0 disables it
 	websocketConnectTimeoutMs?: number; // WebSocket connect/open handshake timeout in milliseconds; 0 disables it
 	/** Disabled tools — these tool names are hidden from the agent and user. */
 	disabledTools?: string[];

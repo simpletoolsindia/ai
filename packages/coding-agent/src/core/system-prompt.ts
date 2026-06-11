@@ -147,23 +147,22 @@ ${toolsList}
 
 ⚠️  PLAN MODE — STRICT WORKFLOW  ⚠️
 
-You are in PLAN mode. The write/edit/bash tools are DISABLED. Your ONLY job in this mode is to create a clear, actionable plan and present it to the user.
+You are in PLAN mode. The write/edit/bash tools are DISABLED. Your job is to investigate, understand the request, and create a clear actionable plan via the \`todo\` tool.
 
-PLAN mode workflow (follow this exactly):
+PLAN mode workflow:
 
-1. INVESTIGATE  Use read-only tools (read, grep, find, websearch, webfetch) to understand the task. Don't guess — read the actual code.
-2. PLAN         Call the \`todo\` tool to create a structured step-by-step plan. Each step is one todo item. Be specific: file paths, function names, expected behavior.
-3. PRESENT      Summarize the plan in 1–3 short sentences and tell the user clearly: "Press Tab (or run \`/mode execute\`) to start applying the plan."
-4. STOP         Do NOT call any more tools. Wait for the user to switch to EXECUTE mode.
+1. INVESTIGATE  Use read-only tools (read, grep, find, websearch, webfetch) to understand the task. If something is unclear (e.g., the user didn't specify a file path), ask ONE short clarifying question — then KEEP investigating.
+2. PLAN         Once you understand the task, call \`todo\` with specific, actionable steps. Each step: file path, function name, expected behavior. Don't create vague items.
+3. PRESENT      Summarize the plan in 1–3 sentences and tell the user: "Plan ready — press Tab (or run \`/mode execute\`) to start applying the plan."
 
-Hard rules in PLAN mode:
+Guide rules:
 - Do NOT call write, edit, or bash. They are disabled.
-- Do NOT generate code blocks or pretend to edit files. Describe the plan instead.
-- Do NOT keep investigating once the plan is clear. Two to four \`read\`/\`grep\` calls is usually enough.
-- The plan MUST be written via the \`todo\` tool so it shows up as a checklist for the user.
-- The user will switch to EXECUTE mode themselves. You do not switch modes for them.
+- If the user asks a follow-up question, ANSWER it and continue.
+- If you need more context, ask and CONTINUE investigating — don't stop after asking.
+- Once a solid plan is in the todo list, present it and stop. But you can resume if the user asks more questions.
+- Available tools: read, grep (content search), find (filename search), websearch, webfetch, todo, subagent. Use \`grep\` to scan many files; \`read\` for one file.
 
-When the user later switches to EXECUTE and continues, work through the todos in order, marking each \`in_progress\` when you start and \`completed\` when done. The todo list is the contract between you and the user.`
+When the user switches to EXECUTE, work through todos in order, marking \`in_progress\` when you start and \`completed\` when done.`
 			: mode === "execute"
 				? `
 
@@ -174,8 +173,9 @@ You are in EXECUTE mode. You have the full default tool set including write, edi
 	}
 
 Tool usage:
-- \`read\` is for one file. To scan many files, use \`grep\` (content) or \`find\`/\`ls\` (names).
+- \`read\` is for one file. To scan many files, use \`grep\` (content search) or \`find\` (filename search).
 - **Always \`read\` a file BEFORE \`edit\`ing it.** The \`edit\` tool requires exact \`oldText\` matching — you must copy text exactly from the file.
+- If a tool is not in the Available tools list above, it does NOT exist. Don't guess tool names — use only what's listed.
 - \`subagent\` delegates a focused subtask (review, research, refactor) and keeps the main context clean.
 - Prefer editing existing files over creating new ones; follow project conventions for naming, formatting, and error handling.
 - Don't quote full tool output back to the user — summarize what you found and what you did.

@@ -3049,7 +3049,18 @@ export class InteractiveMode {
 			case "tool_execution_end": {
 				const component = this.pendingTools.get(event.toolCallId);
 				if (component) {
-					component.updateResult({ ...event.result, isError: event.isError });
+					// Hide verbose tool errors from the user — the agent handles them.
+					// Replace with a brief summary so the chat stays clean.
+					const displayResult = event.isError
+						? {
+								...event.result,
+								content: event.result.content
+									? [{ type: "text" as const, text: `⚠️ ${event.toolName} failed — agent will retry` }]
+									: `⚠️ ${event.toolName} failed — agent will retry`,
+								isError: true,
+						  }
+						: event.result;
+					component.updateResult({ ...displayResult, isError: event.isError });
 					this.pendingTools.delete(event.toolCallId);
 					// Tool is done; the model will receive the result and
 					// continue. Show "Working..." to reflect that.
@@ -6420,6 +6431,19 @@ export class InteractiveMode {
 		if (this.todoListComponent) {
 			this.todoListComponent.setMode(next);
 		}
+
+		// Auto-execute: when switching from PLAN to EXECUTE with an
+		// active plan (todo items exist), immediately start implementing.
+		if (current === "plan" && next === "execute") {
+			const todoState = getTodoStore().getState();
+			if (todoState.items.length > 0) {
+				// Submit a prompt to start executing the plan
+				this.session.prompt(
+					"Execute the plan from the todo list. Work through each item in order, marking each in_progress when you start and completed when done.",
+				).catch(() => {});
+			}
+		}
+
 		this.ui.requestRender();
 	}
 

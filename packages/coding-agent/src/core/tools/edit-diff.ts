@@ -91,13 +91,11 @@ export interface AppliedEditsResult {
 }
 
 /**
- * Find oldText in content, trying exact match first, then fuzzy match.
- * When fuzzy matching is used, the returned contentForReplacement is the
- * fuzzy-normalized version of the content (trailing whitespace stripped,
- * Unicode quotes/dashes normalized to ASCII).
+ * Find oldText in content, trying exact match first, then progressively
+ * more aggressive fuzzy matching. Uses 4 fallback strategies before giving up.
  */
 export function fuzzyFindText(content: string, oldText: string): FuzzyMatchResult {
-	// Try exact match first
+	// Strategy 1: Exact match
 	const exactIndex = content.indexOf(oldText);
 	if (exactIndex !== -1) {
 		return {
@@ -109,30 +107,110 @@ export function fuzzyFindText(content: string, oldText: string): FuzzyMatchResul
 		};
 	}
 
-	// Try fuzzy match - work entirely in normalized space
+	// Strategy 2: Fuzzy match (normalize quotes/dashes/indentation)
 	const fuzzyContent = normalizeForFuzzyMatch(content);
 	const fuzzyOldText = normalizeForFuzzyMatch(oldText);
 	const fuzzyIndex = fuzzyContent.indexOf(fuzzyOldText);
-
-	if (fuzzyIndex === -1) {
+	if (fuzzyIndex !== -1) {
 		return {
-			found: false,
-			index: -1,
-			matchLength: 0,
-			usedFuzzyMatch: false,
-			contentForReplacement: content,
+			found: true,
+			index: fuzzyIndex,
+			matchLength: fuzzyOldText.length,
+			usedFuzzyMatch: true,
+			contentForReplacement: fuzzyContent,
 		};
 	}
 
-	// When fuzzy matching, we work in the normalized space for replacement.
-	// This means the output will have normalized whitespace/quotes/dashes,
-	// which is acceptable since we're fixing minor formatting differences anyway.
+	// Strategy 3: Line-by-line fuzzy match — match each line independently
+	// with relaxed whitespace. Useful when the LLM gets indentation wrong
+	// but the line content is correct.
+	const fuzzyLines = fuzzyContent.split("\n");
+	const oldLines = fuzzyOldText.split("\n");
+	if (oldLines.length >= 2) {
+		// Match first line, then verify consecutive lines
+		for (let i = 0; i <= fuzzyLines.length - oldLines.length; i++) {
+			const firstMatch = fuzzyLines[i].trim() === oldLines[0].trim();
+			if (!firstMatch) continue;
+			let allMatch = true;
+			for (let j = 1; j < oldLines.length; j++) {
+				if (fuzzyLines[i + j].trim() !== oldLines[j].trim()) {
+					allMatch = false;
+					break;
+				}
+			}
+			if (allMatch) {
+				// Found! Reconstruct the exact slice from fuzzyContent
+				const matchedLines = fuzzyLines.slice(i, i + oldLines.length).join("\n");
+				const matchIndex = fuzzyContent.indexOf(matchedLines);
+				if (matchIndex !== -1) {
+					return {
+						found: true,
+						index: matchIndex,
+						matchLength: matchedLines.length,
+						usedFuzzyMatch: true,
+						contentForReplacement: fuzzyContent,
+					};
+				}
+			}
+		}
+	}
+
+	// Strategy 4: Relaxed match — collapse all whitespace and try substring
+	const relaxedContent = fuzzyContent.replace(/\s+/g, " ").trim();
+	const relaxedOld = fuzzyOldText.replace(/\s+/g, " ").trim();
+	const relaxedIdx = relaxedContent.indexOf(relaxedOld);
+	if (relaxedIdx !== -1 && relaxedOld.length > 10) {
+		// Reverse-map the relaxed index to fuzzy content
+		let charCount = 0;
+		let fuzzyMatchStart = 0;
+		for (let ci = 0; ci < fuzzyContent.length; ci++) {
+			if (fuzzyContent[ci] !== " " || (ci > 0 && fuzzyContent[ci - 1] !== " ")) {
+				if (charCount === relaxedIdx) {
+					fuzzyMatchStart = ci;
+					break;
+				}
+				charCount++;
+			}
+		}
+		return {
+			found: true,
+			index: fuzzyMatchStart,
+			matchLength: oldText.length,
+			usedFuzzyMatch: true,
+			contentForReplacement: fuzzyContent,
+		};
+	}
+
+	// Strategy 5: Try matching just the first and last line (structural match)
+	if (oldLines.length >= 3) {
+		const firstLine = oldLines[0].trim();
+		const lastLine = oldLines[oldLines.length - 1].trim();
+		if (firstLine.length > 2 && lastLine.length > 2) {
+			for (let i = 0; i <= fuzzyLines.length - oldLines.length; i++) {
+				if (fuzzyLines[i].trim() === firstLine &&
+					fuzzyLines[i + oldLines.length - 1].trim() === lastLine) {
+					const matchedLines = fuzzyLines.slice(i, i + oldLines.length).join("\n");
+					const matchIndex = fuzzyContent.indexOf(matchedLines);
+					if (matchIndex !== -1) {
+						return {
+							found: true,
+							index: matchIndex,
+							matchLength: matchedLines.length,
+							usedFuzzyMatch: true,
+							contentForReplacement: fuzzyContent,
+						};
+					}
+				}
+			}
+		}
+	}
+
 	return {
-		found: true,
-		index: fuzzyIndex,
-		matchLength: fuzzyOldText.length,
-		usedFuzzyMatch: true,
-		contentForReplacement: fuzzyContent,
+		found: false,
+		index: -1,
+		matchLength: 0,
+		usedFuzzyMatch: false,
+		contentForReplacement: content,
 	};
 }
 

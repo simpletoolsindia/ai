@@ -1,17 +1,17 @@
 {
 	"name": "@simpletoolsindiaorg/ai-coding-agent",
-	"version": "0.80.0",
+	"version": "0.80.1",
 	"lockfileVersion": 3,
 	"requires": true,
 	"packages": {
 		"": {
 			"name": "@simpletoolsindiaorg/ai-coding-agent",
-			"version": "0.80.0",
+			"version": "0.80.1",
 			"license": "MIT",
 			"dependencies": {
-				"@simpletoolsindiaorg/ai-agent": "^0.79.0",
-				"@simpletoolsindiaorg/ai-provider": "^0.79.0",
-				"@simpletoolsindiaorg/ai-tui": "^0.79.0",
+				"@simpletoolsindiaorg/ai-agent": "^0.80.0",
+				"@simpletoolsindiaorg/ai-provider": "^0.80.0",
+				"@simpletoolsindiaorg/ai-tui": "^0.80.0",
 				"@silvia-odwyer/photon-node": "0.3.4",
 				"@mixmark-io/domino": "2.2.0",
 				"better-sqlite3": "12.9.0",
@@ -840,7 +840,7 @@
 			"resolved": "https://registry.npmjs.org/@simpletoolsindiaorg/ai-agent/-/ai-agent-0.80.0.tgz",
 			"license": "MIT",
 			"dependencies": {
-				"@simpletoolsindiaorg/ai-provider": "^0.79.0",
+				"@simpletoolsindiaorg/ai-provider": "^0.80.0",
 				"ignore": "7.0.5",
 				"typebox": "1.1.38",
 				"yaml": "2.9.0"

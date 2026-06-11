@@ -99,9 +99,10 @@ describe("buildSystemPrompt: mode integration", () => {
 
 	it("includes the PLAN-mode hint when mode=plan", () => {
 		const p = buildSystemPrompt({ ...baseOpts, mode: "plan" });
-		expect(p).toContain("PLAN MODE");
-		expect(p).toContain("write/edit/bash are disabled");
-		expect(p).toContain("/mode execute");
+		expect(p).toContain("PLAN MODE — STRICT WORKFLOW");
+		expect(p).toContain("write, edit, or bash");
+		expect(p).toContain("`/mode execute`");
+		expect(p).toContain("`todo` tool");
 	});
 });
 

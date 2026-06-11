@@ -386,6 +386,8 @@ export class InteractiveMode {
 	// Built-in header (logo + keybinding hints + changelog)
 	private builtInHeader: Component | undefined = undefined;
 	private todoListComponent: TodoListComponent | undefined = undefined;
+	private todoContainer: Container | undefined = undefined;
+	private planReadyHintComponent: Container | undefined = undefined;
 
 	// Custom header from extension (undefined = use built-in header)
 	private customHeader: (Component & { dispose?(): void }) | undefined = undefined;
@@ -719,10 +721,6 @@ export class InteractiveMode {
 			// Setup UI layout
 			this.headerContainer.addChild(new Spacer(1));
 			this.headerContainer.addChild(this.builtInHeader);
-			// Persistent todo list widget — always visible (renders nothing if list is empty)
-			this.todoListComponent = new TodoListComponent();
-			this.todoListComponent.setInvalidator(() => this.ui.invalidate());
-			this.headerContainer.addChild(this.todoListComponent);
 			this.headerContainer.addChild(new Spacer(1));
 		} else {
 			// Minimal header when silenced
@@ -732,6 +730,16 @@ export class InteractiveMode {
 
 		this.ui.addChild(this.chatContainer);
 		this.ui.addChild(this.pendingMessagesContainer);
+		// Sticky todo list — always visible at the bottom of the chat,
+		// above the editor. Passive renderer; the `todo` tool is the
+		// only writer. Placeholder row keeps the slot reserved so the
+		// layout doesn't jump as the list grows.
+		this.todoContainer = new Container();
+		this.todoListComponent = new TodoListComponent();
+		this.todoListComponent.setSticky(true);
+		this.todoListComponent.setInvalidator(() => this.ui.requestRender());
+		this.todoContainer.addChild(this.todoListComponent);
+		this.ui.addChild(this.todoContainer);
 		this.ui.addChild(this.statusContainer);
 		this.renderWidgets(); // Initialize with default spacer
 		this.ui.addChild(this.widgetContainerAbove);
@@ -3014,6 +3022,17 @@ export class InteractiveMode {
 					this.streamingComponent = undefined;
 					this.streamingMessage = undefined;
 					this.footer.invalidate();
+				}
+
+				// PLAN-mode hint: after the agent finishes a turn in PLAN mode
+				// with a plan on the todo list, surface a prominent prompt
+				// telling the user to press Tab to start executing.
+				if (
+					this.session.getMode() === "plan" &&
+					this.todoContainer &&
+					getTodoStore().getState().items.length > 0
+				) {
+					this.maybeShowPlanReadyHint();
 				}
 				this.ui.requestRender();
 				break;
@@ -6249,6 +6268,8 @@ export class InteractiveMode {
 	 */
 	private handleModeCommand(arg: string): void {
 		const current = this.session.getMode();
+		// Clear any pending "plan ready" hint — the user is acting.
+		this.planReadyHintComponent = undefined;
 		let next: "plan" | "execute" | null = null;
 
 		if (!arg) {
@@ -6295,6 +6316,41 @@ export class InteractiveMode {
 		// Re-render the footer so the new mode badge appears right away.
 		this.footer.invalidate();
 		this.ui.requestRender();
+	}
+
+	/**
+	 * PLAN-mode "plan ready" hint.
+	 *
+	 * After the agent finishes a turn in PLAN mode with at least one
+	 * todo on the list, surface a prominent prompt at the bottom of the
+	 * chat: "Plan ready — press Tab to start executing". This makes the
+	 * handoff from PLAN → EXECUTE obvious; without it the user has to
+	 * notice the mode badge in the footer.
+	 *
+	 * Idempotent: only adds the hint once per turn. Calling
+	 * `handleModeCommand` clears it (so when the user does press Tab
+	 * the hint goes away immediately).
+	 */
+	private maybeShowPlanReadyHint(): void {
+		if (this.planReadyHintComponent) return;
+		const hint = new Container();
+		hint.addChild(
+			new Text(
+				theme.fg(
+					"accent",
+					`  ${theme.bold("✓ Plan ready")}  —  press `,
+				) +
+					theme.bold(theme.fg("warning", "Tab")) +
+					theme.fg("accent", " or run `") +
+					theme.bold(theme.fg("warning", "/mode execute")) +
+					theme.fg("accent", "` to start applying the plan."),
+				0,
+				0,
+			),
+		);
+		hint.addChild(new Spacer(1));
+		this.chatContainer.addChild(hint);
+		this.planReadyHintComponent = hint;
 	}
 
 	/**

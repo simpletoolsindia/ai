@@ -2,7 +2,24 @@
 
 > **Fork notice:** This is the changelog for **ai**, a fork of [pi](https://github.com/earendil-works/pi). Entries up to and including v0.78.1 are inherited verbatim from the upstream pi project. Starting with the first ai release, new entries are added by this fork. See [NOTICE.md](https://github.com/simpletoolsindiaorg/ai/blob/main/NOTICE.md) for the full fork attribution.
 
-## [0.79.6] - 2026-06-11
+## [0.79.7] - 2026-06-11
+
+The PLAN/EXECUTE workflow is now strict and discoverable. The todo list is now sticky at the bottom of the screen and animates as work progresses.
+
+### New Features
+
+- **Sticky todo list at the bottom of the screen** — the active plan is always visible while the agent works. A progress bar shows X/Y done. Items that just changed status get a brief flash so the user can see what just happened. Up to 5 items are visible at a time; the rest are summarised as "+N more". A placeholder line reserves the slot so the layout doesn't jump as the list grows or shrinks.
+- **PLAN-mode strict workflow** — the system prompt in PLAN mode now spells out a 4-step workflow: INVESTIGATE, PLAN (via the `todo` tool), PRESENT, STOP. Hard rules: do not call write/edit/bash, do not generate code, do not keep investigating once the plan is clear. The plan MUST go through the `todo` tool so it shows up as a checklist for the user.
+- **"Plan ready" hint** — when the agent finishes a turn in PLAN mode with at least one todo, a prominent hint appears at the bottom of the chat: "Plan ready — press Tab or run `/mode execute` to start applying the plan." The hint is cleared the moment the user switches modes.
+- **EXECUTE-mode reminder** — when in EXECUTE mode, the system prompt reminds the model to work through the active todo list in order, marking each `in_progress` when starting and `completed` when done.
+
+### Added
+
+- `TodoListComponent.setSticky(boolean)` — reserves a layout slot even when the list is empty.
+- `maybeShowPlanReadyHint()` in interactive-mode — triggered on `message_end` when in PLAN mode with a non-empty todo list.
+- 12 new tests in `test/sticky-todo-list.test.ts` (component wiring, system-prompt content, plan-ready hint).
+
+## [0.79.5] - 2026-06-11
 
 Hotfix release.
 

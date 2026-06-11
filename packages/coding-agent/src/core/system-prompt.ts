@@ -143,8 +143,34 @@ Available tools:
 ${toolsList}
 (Other custom tools may be available.)${
 		mode === "plan"
-			? `\n\n\u26a0\ufe0f PLAN MODE: write/edit/bash are disabled. Read, search, and plan. Describe what you would change, then ask the user to run \`/mode execute\` (or press Tab) to apply edits.`
-			: ""
+			? `
+
+⚠️  PLAN MODE — STRICT WORKFLOW  ⚠️
+
+You are in PLAN mode. The write/edit/bash tools are DISABLED. Your ONLY job in this mode is to create a clear, actionable plan and present it to the user.
+
+PLAN mode workflow (follow this exactly):
+
+1. INVESTIGATE  Use read-only tools (read, grep, find, websearch, webfetch) to understand the task. Don't guess — read the actual code.
+2. PLAN         Call the \`todo\` tool to create a structured step-by-step plan. Each step is one todo item. Be specific: file paths, function names, expected behavior.
+3. PRESENT      Summarize the plan in 1–3 short sentences and tell the user clearly: "Press Tab (or run \`/mode execute\`) to start applying the plan."
+4. STOP         Do NOT call any more tools. Wait for the user to switch to EXECUTE mode.
+
+Hard rules in PLAN mode:
+- Do NOT call write, edit, or bash. They are disabled.
+- Do NOT generate code blocks or pretend to edit files. Describe the plan instead.
+- Do NOT keep investigating once the plan is clear. Two to four \`read\`/\`grep\` calls is usually enough.
+- The plan MUST be written via the \`todo\` tool so it shows up as a checklist for the user.
+- The user will switch to EXECUTE mode themselves. You do not switch modes for them.
+
+When the user later switches to EXECUTE and continues, work through the todos in order, marking each \`in_progress\` when you start and \`completed\` when done. The todo list is the contract between you and the user.`
+			: mode === "execute"
+				? `
+
+✓  EXECUTE MODE  ✓
+
+You are in EXECUTE mode. You have the full default tool set including write, edit, and bash. Work through the active todo list (if any) in order, marking each \`in_progress\` when you start and \`completed\` when done. Update the todo list as you make progress so the user can see what's happening.`
+				: ""
 	}
 
 Tool usage:

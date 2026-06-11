@@ -20,7 +20,7 @@ export function NavBar() {
 					<span className="font-bold text-lg text-white group-hover:text-accent-200 transition-colors">
 						ai
 					</span>
-					<span className="text-xs text-ink-400 font-mono hidden sm:inline">v0.79.6</span>
+					<span className="text-xs text-ink-400 font-mono hidden sm:inline">v0.79.7</span>
 				</Link>
 				<nav className="hidden md:flex items-center gap-1">
 					{navItems.map((item) => {

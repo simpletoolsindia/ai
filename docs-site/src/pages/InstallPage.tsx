@@ -32,7 +32,7 @@ export function InstallPage() {
 			<h2>From npm only (no build)</h2>
 			<CodeBlock
 				language="bash"
-				code={`npm install -g @simpletoolsindiaorg/ai-coding-agent@0.79.6
+				code={`npm install -g @simpletoolsindiaorg/ai-coding-agent@0.79.7
 npm rebuild -g better-sqlite3
 ai --version`}
 			/>

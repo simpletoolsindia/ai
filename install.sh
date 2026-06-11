@@ -32,7 +32,7 @@ set -euo pipefail
 # Config
 # ---------------------------------------------------------------------------
 
-REPO_URL="${AI_REPO_URL:-https://github.com/simpletoolsindiaorg/ai.git}"
+REPO_URL="${AI_REPO_URL:-https://github.com/simpletoolsindia/ai.git}"
 REPO_REF="${AI_REPO_REF:-main}"
 PREFIX="${AI_PREFIX:-$HOME/.ai}"
 BIN_DIR="${AI_BIN_DIR:-$PREFIX/bin}"

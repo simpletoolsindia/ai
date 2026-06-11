@@ -1,91 +1,36 @@
-# NOTICE — Attribution and modifications
+# NOTICE
 
-This project is a fork of [`pi`](https://github.com/earendil-works/pi), originally created and maintained by **Mario Zechner** and the **earendil-works** community.
+`ai` is released under the MIT License. The full license text is in [LICENSE](LICENSE).
 
-## Upstream
+## Attribution
 
-- **Project:** pi (https://pi.dev, https://github.com/earendil-works/pi)
-- **Original author:** Mario Zechner
-- **Copyright:** (c) 2025 Mario Zechner
-- **License:** MIT
-- **Upstream LICENSE file:** preserved verbatim in this repository at [LICENSE](LICENSE)
+`ai` incorporates and builds on the design and code of the [pi](https://github.com/earendil-works/pi) self-extensible coding agent by **Mario Zechner / earendil-works** (MIT, Copyright (c) 2025 Mario Zechner). We are grateful to the upstream project and its maintainer.
 
-We (simpletoolsindiaorg) did not author the original code. We are grateful for the upstream project and acknowledge that all credit for the design, architecture, and implementation belongs to its original authors.
+Specifically, `ai` carries over from the upstream project:
 
-## Modifications in this fork
+- The four-package monorepo structure (`provider` / `agent` / `tui` / `coding-agent`)
+- The agent loop, tool execution model, and session manager
+- The TUI rendering engine and keybinding system
+- The provider abstraction (Anthropic, OpenAI, Google, Bedrock, etc.)
+- The extension lifecycle, subagent spawn pattern, and skill discovery rules
 
-This fork contains the following categories of changes to the upstream code:
+The original license and copyright are preserved in [LICENSE](LICENSE).
 
-### 1. Identity and naming
+## Re-branding only
 
-- Package scope: `@earendil-works/pi-*` → `@simpletoolsindiaorg/ai-*`
-- Package names: `pi-ai` → `ai-provider`, `pi-agent-core` → `ai-agent`, `pi-coding-agent` → `ai-coding-agent`, `pi-tui` → `ai-tui`
-- Monorepo name: `pi-monorepo` → `ai-monorepo`
-- CLI binary: `pi` → `ai`
-- User config dir default: `~/.pi/agent/` → `~/.ai/agent/`
-- Project config dir default: `.pi/` → `.ai/`
-- App title character: `π` → `α`
-- Repository URL: `github.com/earendil-works/pi` → `github.com/simpletoolsindiaorg/ai`
+In addition to the upstream code, `ai` introduces product-identity renames (package scope `@simpletoolsindiaorg/ai-*`, binary name `ai`, config directory `~/.ai/agent/`) and a small set of additive features:
 
-### 2. Public API and config keys
+- Built-in `websearch` and `webfetch` tools
+- Built-in `subagent` tool with parallel/chain modes
+- Built-in `todo` tool with a TUI overlay
+- Ollama local model auto-discovery (`autoDiscover: "ollama"`)
+- Local-server auth skip (`optionalApiKey: true`)
+- Auto-derive a skill `description` from its first heading
+- Markdown / JSON session export
+- Skip Windows builds in CI
 
-- `package.json` `piConfig` key → `aiConfig` (with back-compat: `piConfig` is still accepted and behaves identically)
-- Extension manifest key `pi.extensions/skills/prompts/themes` → `ai.*` (with back-compat: `pi.*` is still accepted)
-- Environment variables: `PI_OFFLINE` → `AI_OFFLINE`, `PI_TELEMETRY` → `AI_TELEMETRY`, `PI_SHARE_VIEWER_URL` → `AI_SHARE_VIEWER_URL`, `PI_CLEAR_ON_SHRINK` → `AI_CLEAR_ON_SHRINK`, `PI_HARDWARE_CURSOR` → `AI_HARDWARE_CURSOR`
-- Skill discovery mode enum value: `"pi"` → `"ai"` (with back-compat: `"pi"` is still accepted)
-- `update self` subcommand alias: `update pi` → `update ai` (with back-compat: `update pi` is still accepted)
+Behavior, public TypeScript types, and the agent loop are intentionally identical to the upstream code where they overlap. Any divergence is a bug.
 
-### 3. External endpoints
+## Third-party components
 
-- Version check URL: `https://pi.dev/api/latest-version` → `https://api.simpletoolsindiaorg.invalid/latest-version` (placeholder; replace with a real endpoint before shipping)
-- Install telemetry URL: `https://pi.dev/api/report-install` → `https://api.simpletoolsindiaorg.invalid/report-install` (placeholder)
-- Share viewer URL: `https://pi.dev/session/` → `https://api.simpletoolsindiaorg.invalid/session/` (placeholder)
-- Changelog URL: `https://pi.dev/changelog` → `https://github.com/simpletoolsindiaorg/ai/blob/main/packages/coding-agent/CHANGELOG.md`
-- GitHub release download URL: `https://github.com/earendil-works/pi-mono/releases/latest` → `https://github.com/simpletoolsindiaorg/ai/releases/latest`
-- Upstream issue links: `https://github.com/earendil-works/pi-mono/issues/...` → `https://github.com/simpletoolsindiaorg/ai/issues/...`
-
-### 4. Internal identifiers and file paths
-
-These are not user-facing but were renamed for consistency:
-
-- Internal temp file prefixes: `pi-output`, `pi-bash`, `pi-editor`, `pi-extensions` → `ai-*` equivalents
-- Log file paths: `~/.pi/agent/pi-debug.log`, `pi-crash.log` → `~/.ai/agent/ai-debug.log`, `ai-crash.log`
-- Windows self-update quarantine dir: `.pi-native-quarantine` → `.ai-native-quarantine`
-- HTTP user agent string: `pi/<version> (...)` → `ai/<version> (...)`
-- Provider attribution headers (OpenRouter, OpenCode, Cloudflare, Bedrock middleware name)
-- User-facing messages in `main.ts`, `interactive-mode.ts`, `package-manager-cli.ts`, and other UI surfaces
-- System prompt references to "pi" (the LLM is told to read about "ai" instead)
-- JSDoc examples using `pi.registerProvider(...)` etc.
-- Example extension code: function parameter renamed from `pi` to `ai` in all `examples/extensions/*.ts`
-- `piConfig` types and interfaces renamed to `aiConfig`; type names `PiManifest` → `AiManifest`
-
-### 5. Documentation
-
-- `README.md` rewritten to describe the fork and how it differs from upstream
-- This `NOTICE.md` added (did not exist upstream)
-- `LICENSE` preserved verbatim from upstream
-
-### 6. Things explicitly NOT changed
-
-- All algorithmic behavior: agent loop, tool execution, compaction, session management, extension lifecycle
-- All public TypeScript types (renames preserve the same shape; only the *names* differ)
-- All provider implementations (Anthropic, OpenAI, Google, Bedrock, etc.)
-- The TUI rendering engine
-- The full test suite (ported as-is; any test failures should be reported as fork bugs)
-- All CHANGELOG entries prior to the fork (the historical changelogs describe the upstream project, which is accurate — that's where the code came from)
-
-## What we did not do
-
-- We did not remove upstream copyright or attribution from the source files.
-- We did not relicense the upstream code.
-- We did not claim authorship of the original code or design.
-- We did not attempt to mislead anyone about the origin of the code.
-- We did not strip the upstream's `pi.dev` references from historical CHANGELOG entries or comments that quote the upstream.
-
-## If you want to contribute back upstream
-
-The cleanest path is to develop the change in the upstream `pi` repo (where Mario and the maintainers review contributions) and then port the change to this fork. Bug fixes and improvements belong upstream first.
-
-## Trademark
-
-`pi`, `earendil-works`, and the `π` symbol are associated with the upstream project and its maintainer. This fork uses `ai` and `α` as its own product identity. If the upstream maintainer asks us to make a change to how the fork identifies itself, we will.
+`ai` includes vendor JavaScript for HTML-to-PDF export in `packages/coding-agent/src/core/export-html/vendor/`. Each file retains its original license header.

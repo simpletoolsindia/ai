@@ -2,11 +2,11 @@
 
 This document is for both humans and agents working on the `ai` codebase. It contains:
 
-1. **[Project Overview](#1-project-overview)** — what ai is, fork context, high-level architecture
+1. **[Project Overview](#1-project-overview)** — what ai is, high-level architecture
 2. **[Repository Layout](#2-repository-layout)** — where things live
 3. **[Architecture Details](#3-architecture-details)** — how the pieces fit together
 4. **[Build & Runtime](#4-build--runtime)** — how to build, run, and test
-5. **[Naming & Identity Conventions](#5-naming--identity-conventions)** — fork-specific naming rules
+5. **[Naming & Identity Conventions](#5-naming--identity-conventions)** — naming rules
 6. **[Development Rules](#6-development-rules)** — coding style, commands, git
 7. **[Release & Publishing](#7-release--publishing)** — versioning, release flow
 8. **[Subagent & Extension System](#8-subagent--extension-system)** — how to extend ai
@@ -18,37 +18,33 @@ This document is for both humans and agents working on the `ai` codebase. It con
 
 ### What is ai?
 
-`ai` is a fork of the upstream **`pi`** self-extensible coding agent (https://github.com/earendil-works/pi), repackaged and renamed under the `@simpletoolsindiaorg` npm scope. The fork preserves the original architecture, agent loop, TUI, extension system, and provider implementations — only the identity and a small number of branding strings were changed.
+`ai` is a terminal-based, self-extensible AI coding agent. It runs in your shell, reads and edits your project, runs shell commands, and (optionally) queries the web. It is a TypeScript monorepo with four packages (provider / agent / tui / coding-agent) and a layered architecture: LLM provider abstraction, agent runtime, interactive CLI, terminal UI.
 
-The product is a terminal-based interactive coding agent that:
+The product:
+
 - Reads files, runs bash, edits code, writes new files
-- Supports multiple LLM providers (OpenAI, Anthropic, Google, Bedrock, OpenRouter, Ollama, etc.)
+- Supports multiple LLM providers (OpenAI, Anthropic, Google, Bedrock, OpenRouter, Ollama, any OpenAI-compatible local server, etc.)
 - Streams responses, supports parallel/queued messages, model cycling, thinking-level control
-- Manages sessions on disk as JSONL; can resume, fork, branch, export, and share
+- Manages sessions on disk as JSONL; can resume, fork, branch, export to Markdown or JSON
 - Extensible via TypeScript extensions, skills (markdown), prompt templates, and themes
 - Has a self-update mechanism (`ai update self`) and a private plugin store
+- Auto-discovers locally-installed Ollama models when configured (no manual enumeration)
+- Has a built-in todo overlay, built-in subagent spawning, and built-in web search/fetch
 
-### Fork context
+### License & attribution
 
-| | Upstream `pi` | This fork `ai` |
-|---|---|---|
-| Repo | `github.com/earendil-works/pi` | `github.com/simpletoolsindiaorg/ai` |
-| Scope | `@earendil-works/pi-*` | `@simpletoolsindiaorg/ai-*` |
-| Bin | `pi` | `ai` |
-| User config dir | `~/.pi/agent/` | `~/.ai/agent/` |
-| Project config dir | `.pi/` | `.ai/` |
-| License | MIT (Copyright Mario Zechner) | MIT (inherits upstream, see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md)) |
+`ai` is MIT-licensed. It carries over design and code from the [pi](https://github.com/earendil-works/pi) project by Mario Zechner / earendil-works — see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for details.
 
-**Most changes should go upstream first.** If you find a bug in the agent loop, a tool, a provider, the TUI, or the extension system, the right place to fix it is the upstream [pi](https://github.com/earendil-works/pi) repository. After the upstream fix lands, this fork can be rebased onto it.
+### Repository at a glance
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the policy on what belongs in the fork vs. upstream.
-
-### Why this is a fork, not a rename
-
-- The `@earendil-works` npm scope and the `pi` name are the upstream maintainer's identity.
-- The maintainer (Mario Zechner) made deliberate design choices around the `pi` name and `π` symbol.
-- A clean rename of an active OSS project without the maintainer's involvement would be a misleading impersonation.
-- The fork preserves attribution (LICENSE, NOTICE.md), provides back-compat for `piConfig`/`pkg.pi`/`@mariozechner/pi-*` aliases, and clearly identifies itself as a fork at every user-facing surface.
+| | |
+|---|---|
+| Repo | `github.com/simpletoolsindia/ai` |
+| Scope | `@simpletoolsindiaorg/ai-*` |
+| Bin | `ai` |
+| User config dir | `~/.ai/agent/` |
+| Project config dir | `.ai/` |
+| License | MIT (see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md)) |
 
 ---
 
@@ -56,11 +52,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the policy on what belongs in the for
 
 ```
 /Users/sridhar/ai/
-├── README.md                        # Fork announcement, install, what's different
-├── NOTICE.md                        # Attribution & list of all fork changes
-├── CONTRIBUTING.md                  # What belongs in fork vs upstream
-├── SECURITY.md                      # Fork-specific security policy
-├── LICENSE                          # MIT, inherited verbatim from upstream
+├── README.md                        # Install, quick start, what's in the box
+├── NOTICE.md                        # License attribution
+├── CONTRIBUTING.md                  # How to contribute
+├── SECURITY.md                      # Security policy
+├── LICENSE                          # MIT
 ├── AGENTS.md                        # This file
 ├── package.json                     # Root workspace, scripts, devDeps
 ├── package-lock.json                # Generated by `npm install`
@@ -242,7 +238,7 @@ This is the largest package. It glues everything together.
   - **`args.ts`** — argparse-style CLI definition
   - **`config-selector.ts`** — TUI for `ai config`
 - **`migrations/`** — directory-structure migration logic
-- **`docs/`** — user-facing documentation (rendered to https://pi.dev/docs equivalent on the fork's site)
+- **`docs/`** — user-facing documentation (rendered to https://github.com/simpletoolsindia/ai/tree/main/packages/coding-agent/docs)
 - **`examples/`** — example extensions, example SDK consumers, example tests
 
 ### 3.5 Extension model
@@ -252,7 +248,7 @@ Extensions are TypeScript files that export a default function. The loader:
 1. **Discovers** them from `~/.ai/agent/extensions/` (user) and `.ai/extensions/` (project), plus package manifests with `ai.extensions` (back-compat: `pi.extensions`)
 2. **Resolves** dependencies via `npm`/`pnpm`/`bun` (managed by `package-manager.ts`)
 3. **Loads** with `jiti` (in Node) or virtual modules (in Bun binary) — both work because the bundled module map aliases `@simpletoolsindiaorg/ai-*` AND `@mariozechner/pi-*` to the same internal modules
-4. **Runs** them in the same process with an `ExtensionAPI` object: `pi.registerTool(...)`, `pi.registerCommand(...)`, `pi.registerProvider(...)`, `pi.registerShellCommand(...)`, `pi.registerEvent(...)`, `pi.on("event", handler)`, `pi.sendMessage(...)`, etc. (Note: the parameter name in the example extensions is `ai` after the fork; `pi` works via back-compat aliasing)
+4. **Runs** them in the same process with an `ExtensionAPI` object: `ai.registerTool(...)`, `ai.registerCommand(...)`, `ai.registerProvider(...)`, `ai.registerShellCommand(...)`, `ai.registerEvent(...)`, `ai.on("event", handler)`, `ai.sendMessage(...)`, etc. (The legacy `pi.*` method names are also accepted via back-compat aliasing for existing extensions.)
 
 ### 3.6 Session lifecycle
 
@@ -270,7 +266,7 @@ On startup:
 4. Init `AgentSessionRuntime`
 5. If `--print` or `-p` → `print-mode.ts`; if `--rpc` → `rpc-mode.ts`; else → `interactive-mode.ts` (TUI)
 6. Load extensions (via `extensions/loader.ts`)
-7. Show startup notices (changelog if new version, earendil announcement, loaded resources, keybinding hints)
+7. Show startup notices (changelog if new version, loaded resources, keybinding hints)
 8. Enter main loop
 
 ---
@@ -326,13 +322,13 @@ node ../../node_modules/vitest/dist/cli.js --run test/specific.test.ts
 
 ## 5. Naming & Identity Conventions
 
-These rules are **fork-specific**. They preserve the upstream's design and add the fork's identity on top.
+These rules keep the new product identity (`ai`) working alongside the legacy `pi` aliases that some existing extensions and configs still use.
 
 ### 5.1 Back-compat strategy
 
-Everywhere upstream used the `pi` identity, the fork accepts **both** the new and old names:
+The `ai` name is the canonical one. The legacy `pi` names are still accepted so that existing extensions, configs, and scripts keep working:
 
-| New (fork) | Old (upstream, still accepted) | Where |
+| Canonical | Legacy (still accepted) | Where |
 |---|---|---|
 | `aiConfig` in `package.json` | `piConfig` (still read) | `core/extensions/loader.ts`, `core/package-manager.ts` |
 | `ai.extensions` etc. in extension manifests | `pi.extensions` (still read) | same |
@@ -342,39 +338,38 @@ Everywhere upstream used the `pi` identity, the fork accepts **both** the new an
 | `AI_CLEAR_ON_SHRINK` | `PI_CLEAR_ON_SHRINK` | `core/settings-manager.ts` |
 | `AI_HARDWARE_CURSOR` | `PI_HARDWARE_CURSOR` | `core/settings-manager.ts` |
 | `AI_CODING_AGENT_DIR` | `PI_CODING_AGENT_DIR` | `cli.ts`, `core/config.ts` |
-| `AI_SKIP_VERSION_CHECK` | (none — fork only) | `utils/version-check.ts` |
+| `AI_SKIP_VERSION_CHECK` | (none) | `utils/version-check.ts` |
 | `SkillDiscoveryMode: "ai"` | `"pi"` (still read) | `core/package-manager.ts` |
 | `update ai` subcommand | `update pi` (still accepted) | `package-manager-cli.ts` |
 | `@simpletoolsindiaorg/ai-*` imports | `@mariozechner/pi-*` (alias) | `core/extensions/loader.ts` |
 
-**When adding new code or new config keys, use the new `ai` names. Don't add new `pi` aliases — those are only for compatibility with existing extensions and configs.**
+**When adding new code or new config keys, use the `ai` names. Don't add new `pi` aliases — those are only for compatibility with existing extensions and configs.**
 
 ### 5.2 Branding rules
 
-- CLI binary name: `ai` (not `pi`)
+- CLI binary name: `ai`
 - App title: `α` (alpha) — used in TUI title bar, package registry symbol keys, etc.
 - Config dir: `.ai` (user) and `.ai/` (project)
 - `models.json` location: `~/.ai/agent/models.json`
 - HTTP user agent: `ai/<version> (...)`
 - OpenRouter `X-OpenRouter-Title`: `ai`
-- OpenRouter `HTTP-Referer`: `https://github.com/simpletoolsindiaorg/ai` (placeholder — change when the fork has a real homepage)
+- OpenRouter `HTTP-Referer`: `https://github.com/simpletoolsindia/ai`
 - OpenAI Codex OAuth `originator`: `ai`
 - Bedrock middleware name: `ai-provider-custom-headers`
 - Internal temp file prefixes: `ai-bash-*`, `ai-output-*`, `ai-editor-*`, `ai-clipboard-*`, `ai-wsl-clip-*`, `ai-debug.log`, `ai-crash.log`
 - Windows quarantine: `.ai-native-quarantine`
 - Internal bundler module aliases: `_bundledAiAgentCore`, `_bundledAiProvider`, `_bundledAiTui`, `_bundledAiCodingAgent`
-- TypeScript types: `AiManifest` (was `PiManifest`), `LatestAiRelease` (was `LatestPiRelease`)
+- TypeScript types: `AiManifest`, `LatestAiRelease`
 
-### 5.3 Placeholders to replace before shipping
+### 5.3 Endpoints to verify before shipping
 
-These are intentionally placeholder URLs/identifiers. The fork's maintainer must replace them before publishing:
+These endpoints are configurable. Before shipping, confirm the URLs are correct or that the corresponding feature is disabled by default:
 
-| Placeholder | What to replace with | File |
+| Endpoint | Feature | File |
 |---|---|---|
-| `https://api.simpletoolsindiaorg.invalid/latest-version` | Real version-check endpoint | `core/utils/version-check.ts` |
-| `https://api.simpletoolsindiaorg.invalid/report-install` | Real telemetry endpoint | `core/modes/interactive/interactive-mode.ts` |
-| `https://api.simpletoolsindiaorg.invalid/session/` | Real share-viewer URL | `core/config.ts` |
-| `https://github.com/simpletoolsindiaorg/ai` | Actual repo URL | many files |
+| `https://api.simpletoolsindiaorg.invalid/latest-version` | Version check | `core/utils/version-check.ts` |
+| `https://api.simpletoolsindiaorg.invalid/report-install` | Install telemetry | `core/modes/interactive/interactive-mode.ts` |
+| `https://api.simpletoolsindiaorg.invalid/session/` | Share viewer | `core/config.ts` |
 
 ---
 
@@ -401,7 +396,7 @@ These are intentionally placeholder URLs/identifiers. The fork's maintainer must
 - Always ask before removing functionality or code that appears intentional.
 - Do not preserve backward compatibility unless the user asks for it. (Note: the `pi` → `ai` rename **does** preserve back-compat, see §5.1.)
 - Never hardcode key checks (e.g. `matchesKey(keyData, "ctrl+x")`). Add defaults to `DEFAULT_EDITOR_KEYBINDINGS` or `DEFAULT_APP_KEYBINDINGS` so they stay configurable.
-- Never modify `packages/ai/src/models.generated.ts` directly; update `packages/ai/scripts/generate-models.ts` instead, then regenerate. Including the resulting `models.generated.ts` diff is always OK, even if regeneration includes unrelated upstream model metadata changes.
+- Never modify `packages/ai/src/models.generated.ts` directly; update `packages/ai/scripts/generate-models.ts` instead, then regenerate. It's fine to commit the regenerated `models.generated.ts` even if it contains unrelated provider-metadata churn.
 
 ### 6.3 Commands
 
@@ -420,7 +415,7 @@ These are intentionally placeholder URLs/identifiers. The fork's maintainer must
 - Hydrate/update locally with `npm install --ignore-scripts`; clean/CI-style with `npm ci --ignore-scripts`. Don't run lifecycle scripts unless the user asks.
 - If dep metadata changes, refresh `package-lock.json` with `npm install --package-lock-only --ignore-scripts`.
 - If `packages/coding-agent/npm-shrinkwrap.json` needs regen, run `node scripts/generate-coding-agent-shrinkwrap.mjs` (verify with `--check` or `npm run check`). New deps with lifecycle scripts require review and an explicit allowlist entry in that script; never add one silently.
-- Pre-commit blocks lockfile commits unless `PI_ALLOW_LOCKFILE_CHANGE=1` (yes, the env var is still `PI_` for back-compat with upstream's tooling). Don't bypass unless the user wants the lockfile change committed.
+- Pre-commit blocks lockfile commits unless `AI_ALLOW_LOCKFILE_CHANGE=1` (the legacy `PI_ALLOW_LOCKFILE_CHANGE` env var is also accepted for back-compat). Don't bypass unless the user wants the lockfile change committed.
 
 ### 6.5 Git
 
@@ -476,7 +471,7 @@ When closing issues via commit:
 
 **Lockstep versioning**: all four packages share one version; every release updates all together. `patch` = fixes + additions, `minor` = breaking changes. No major releases (no `1.0.0` ever — the project uses `0.x.y`).
 
-The first fork release is `0.79.0` (next after upstream's last `0.78.1`).
+The first public release of `ai` is `0.79.0` (the previous version, `0.78.1`, was the last one under the legacy `pi` name).
 
 ### 7.2 Release flow
 
@@ -518,7 +513,7 @@ The first fork release is `0.79.0` (next after upstream's last `0.78.1`).
 
 ### 7.3 Binary distribution
 
-`npm run build:binary` (in `packages/coding-agent/`) produces a single-file Bun-compiled `dist/pi` (this fork: `dist/ai`) binary. The binary bundles all four packages plus dependencies, so the `dist/` size is large but the install is one file. Used for `dist/pi` releases on GitHub and (in the fork) `dist/ai` for the `@simpletoolsindiaorg/ai-coding-agent` package's binary distribution.
+`npm run build:binary` (in `packages/coding-agent/`) produces a single-file Bun-compiled `dist/ai` binary. The binary bundles all four packages plus dependencies, so the `dist/` size is large but the install is one file. It's used for the `@simpletoolsindiaorg/ai-coding-agent` package's GitHub release artifacts.
 
 ---
 
@@ -624,7 +619,7 @@ For stronger boundaries, containerize ai. Three patterns are documented in `pack
 
 ### 9.3 Supply-chain hardening
 
-Inherited from upstream, unchanged in the fork:
+Inherited from the upstream `pi` project, unchanged:
 
 - Direct external dependencies are pinned to exact versions in `package.json`
 - `.npmrc` sets `save-exact=true` and `min-release-age=2` (avoid same-day dep releases)
@@ -639,7 +634,7 @@ Inherited from upstream, unchanged in the fork:
 
 ### 9.4 Reporting vulnerabilities
 
-See [SECURITY.md](SECURITY.md). For the fork: report to the fork maintainer. For issues inherited from upstream, also report upstream — fixes should land there first.
+See [SECURITY.md](SECURITY.md). For this project: report to the maintainers. For issues that also affect the upstream `pi` project, please also report upstream — fixes should land there first when possible.
 
 ---
 

@@ -12,7 +12,8 @@ const shrinkwrapPath = join(codingAgentDir, "npm-shrinkwrap.json");
 const internalPackagePrefix = "@simpletoolsindiaorg/ai-";
 const allowedInstallScriptPackages = new Map([
 	["@google/genai@1.52.0", "preinstall is a no-op in the published package"],
-	["protobufjs@7.5.9", "postinstall only warns about protobufjs version scheme mismatches"],
+	["better-sqlite3@12.9.0", "postinstall builds the native binding; required for hermes-memory and any other consumer"],
+	["protobufjs@7.6.2", "postinstall only warns about protobufjs version scheme mismatches"],
 ]);
 
 const args = new Set(process.argv.slice(2));

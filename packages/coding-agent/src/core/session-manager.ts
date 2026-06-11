@@ -14,7 +14,7 @@ import {
 	writeFileSync,
 } from "fs";
 import { readdir, stat } from "fs/promises";
-import { join, resolve } from "path";
+import { join, resolve, dirname } from "path";
 import { createInterface } from "readline";
 import { StringDecoder } from "string_decoder";
 import { getAgentDir as getDefaultAgentDir, getSessionsDir } from "../config.ts";
@@ -908,9 +908,14 @@ export class SessionManager {
 	_persist(entry: SessionEntry): void {
 		if (!this.persist || !this.sessionFile) return;
 
-		// Guard: reinstall may have deleted the session file.
-		// If the file is gone, reset the flush state so we re-create it.
-		if (this.flushed && !existsSync(this.sessionFile)) {
+		// Guard: reinstall may have deleted the session file or its
+		// parent directory. Re-create the directory if needed so
+		// appendFileSync/openSync won't throw ENOENT.
+		if (!existsSync(this.sessionFile)) {
+			const dir = dirname(this.sessionFile);
+			if (!existsSync(dir)) {
+				mkdirSync(dir, { recursive: true });
+			}
 			this.flushed = false;
 		}
 

@@ -130,17 +130,17 @@ describe("PLAN-mode system prompt (strict workflow)", () => {
 	it("instructs the model to use the `todo` tool to write the plan", () => {
 		const p = buildSystemPrompt({ ...baseOpts, mode: "plan" });
 		expect(p).toContain("todo");
-		expect(p).toContain("step-by-step plan");
+		expect(p).toContain("actionable");
 	});
 
-	it("tells the model to stop after the plan and wait for the user to switch modes", () => {
+	it("tells the model how to switch to EXECUTE mode", () => {
 		const p = buildSystemPrompt({ ...baseOpts, mode: "plan" });
-		expect(p).toContain("Press Tab");
+		expect(p).toContain("press Tab");
 		expect(p).toContain("/mode execute");
-		expect(p).toContain("STOP");
+		expect(p).toContain("INVESTIGATE");
 	});
 
-	it("includes the 4-step INVESTIGATE/PLAN/PRESENT/STOP workflow", () => {
+	it("includes the 3-step INVESTIGATE/PLAN/PRESENT workflow", () => {
 		const p = buildSystemPrompt({ ...baseOpts, mode: "plan" });
 		expect(p).toContain("INVESTIGATE");
 		expect(p).toContain("PLAN");

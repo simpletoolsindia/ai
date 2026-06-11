@@ -2,6 +2,46 @@
 
 > **Fork notice:** This is the changelog for **ai**, a fork of [pi](https://github.com/earendil-works/pi). Entries up to and including v0.78.1 are inherited verbatim from the upstream pi project. Starting with the first ai release, new entries are added by this fork. See [NOTICE.md](https://github.com/simpletoolsindiaorg/ai/blob/main/NOTICE.md) for the full fork attribution.
 
+## [0.79.0] - 2026-06-11
+
+First public release of `ai` as a distinct project. Four major additions and several improvements.
+
+### New Features
+
+- **Persistent memory (pi-hermes-memory)** - Built-in, always-on. The agent remembers facts, preferences, and failure modes across sessions. SQLite FTS5 powers session search. MIT licensed. Vendored at `packages/coding-agent/src/core/extensions/built-in/hermes-memory/`.
+- **Sandboxed tools (context-mode)** - Built-in, opt-in via `~/.ai/agent/settings.json: { contextMode: { enabled: true } }`. Spawns a sandboxed MCP server that exposes 11 `ctx_*` tools for data-heavy operations. Elastic License v2.0. Vendored bundle at `packages/coding-agent/src/core/extensions/built-in/context-mode/`.
+- **Local Ollama auto-discovery** - Set `autoDiscover: "ollama"` and `optionalApiKey: true` in `models.json`, and `ai` automatically lists and registers all your installed Ollama models on every startup.
+- **Large-response spillover for webfetch** - When a fetched URL exceeds the inline cap (default 100KB), the full content is written to `~/.ai/agent/cache/webfetch/` and the LLM is told the path so it can use the `read` tool to view it.
+
+### Tools (built-in, default-on)
+
+- `read`, `write`, `edit`, `bash`, `grep`, `find`, `ls` - file ops
+- `websearch` (SearXNG), `webfetch` (any URL) - with spillover
+- `subagent` (single, parallel, chain modes) - delegated LLM calls
+- `todo` (session-scoped task list with TUI overlay)
+- `memory`, `memory_search`, `session_search` (from hermes-memory)
+- `ctx_execute`, `ctx_execute_file`, `ctx_batch_execute`, `ctx_search`, `ctx_index`, `ctx_fetch_and_index`, `ctx_stats`, `ctx_doctor`, `ctx_upgrade`, `ctx_purge`, `ctx_insight` (from context-mode, opt-in)
+
+### Improvements
+
+- **Skill description** is now optional. If a `SKILL.md` has no `description` frontmatter, `ai` derives one from the first H1/H2 heading and emits a warning. Skills that were previously invisible to the LLM are now invokable.
+- **`models.json` schema** gained two new fields:
+  - `optionalApiKey: true` - provider does not require an API key (use for local servers)
+  - `autoDiscover: "ollama"` - auto-fetch installed models from the server
+- **Documentation** - README rewritten around the new features, with a one-line install, an update path, and clear "How to use" sections for each integration.
+- **install.sh** now handles both install and update in one command.
+
+### Tests
+
+- 1517 tests across 145 files (up from 1401 before this work)
+- New: 9 hermes-memory tests, 6 mcp-client tests, 5 webfetch-spillover tests
+- All non-flaky failures are pre-existing and unrelated to this release.
+
+### License notes
+
+- `pi-hermes-memory` source: MIT (preserved in `THIRD-PARTY/LICENSE`)
+- `mksglu/context-mode` MCP server bundle: **Elastic License v2.0** (preserved in `THIRD-PARTY/ELv2-LICENSE`). Source-available, not OSI-approved. Use, modify, redistribute freely; do not provide as a managed service that competes with the original.
+
 ## [Unreleased]
 
 ### New Features

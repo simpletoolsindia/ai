@@ -126,9 +126,7 @@ export function createTodoToolDefinition(_cwd: string): ToolDefinition<typeof to
 			}
 
 			if (!Array.isArray(p.todos)) {
-				throw new Error(
-					"Missing required argument: either `todos` (array) or `clear: true`",
-				);
+				throw new Error("Missing required argument: either `todos` (array) or `clear: true`");
 			}
 
 			// Normalize items

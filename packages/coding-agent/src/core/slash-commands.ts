@@ -19,7 +19,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "settings", description: "Open settings menu" },
 	{ name: "model", description: "Select model (opens selector UI)" },
 	{ name: "scoped-models", description: "Enable/disable models for Ctrl+P cycling" },
-	{ name: "export", description: "Export session. Format by extension: .html (default), .md (markdown), .json (structured), .jsonl (raw). No path = write to default location." },
+	{
+		name: "export",
+		description:
+			"Export session. Format by extension: .html (default), .md (markdown), .json (structured), .jsonl (raw). No path = write to default location.",
+	},
 	{ name: "import", description: "Import and resume a session from a JSONL file" },
 	{ name: "share", description: "Share session as a secret GitHub gist" },
 	{ name: "copy", description: "Copy last agent message to clipboard" },
@@ -36,9 +40,20 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "new", description: "Start a new session" },
 	{ name: "compact", description: "Manually compact the session context" },
 	{ name: "resume", description: "Resume a different session" },
-	{ name: "subagent", description: "Manually invoke a subagent (same as the LLM-callable subagent tool). Useful for dispatching investigations without typing a full prompt." },
-	{ name: "todo", description: "Show the current todo list (read-only). The agent maintains it via the todo tool; this just displays it." },
-	{ name: "clear-todo", description: "Clear the current todo list. Useful if the list is stale or the agent has lost track of progress." },
+	{
+		name: "subagent",
+		description:
+			"Manually invoke a subagent (same as the LLM-callable subagent tool). Useful for dispatching investigations without typing a full prompt.",
+	},
+	{
+		name: "todo",
+		description:
+			"Show the current todo list (read-only). The agent maintains it via the todo tool; this just displays it.",
+	},
+	{
+		name: "clear-todo",
+		description: "Clear the current todo list. Useful if the list is stale or the agent has lost track of progress.",
+	},
 	{ name: "reload", description: "Reload keybindings, extensions, skills, prompts, and themes" },
 	{ name: "quit", description: `Quit ${APP_NAME}` },
 ];

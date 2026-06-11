@@ -124,6 +124,12 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 	// Always include these
 	addGuideline("Be concise in your responses");
 	addGuideline("Show file paths clearly when working with files");
+	addGuideline(
+		"If you don't have a tool or data to answer a question, say so explicitly — do NOT confabulate URLs, file paths, or facts",
+	);
+	addGuideline(
+		"When the user asks for current or external information (prices, news, docs, weather, etc.), USE the websearch and webfetch tools — don't guess or hallucinate",
+	);
 
 	const guidelines = guidelinesList.map((g) => `- ${g}`).join("\n");
 

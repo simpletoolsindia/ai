@@ -57,6 +57,8 @@ export class TodoListComponent extends Container {
 	private diff: DiffState = { changedIndices: new Set(), generation: 0 };
 	/** True when this component is in sticky (always-visible) mode. */
 	private sticky = true;
+	/** Current agent mode — changes the header label. */
+	private agentMode: "plan" | "execute" = "plan";
 
 	constructor() {
 		super();
@@ -70,6 +72,17 @@ export class TodoListComponent extends Container {
 	 */
 	setInvalidator(callback: TodoInvalidator): void {
 		this.invalidateCallback = callback;
+	}
+
+	/**
+	 * Set the current agent mode. The header label changes from
+	 * "Plan" in PLAN mode to "Tasks" in EXECUTE mode.
+	 * Call this whenever the mode changes so the display is accurate.
+	 */
+	setMode(mode: "plan" | "execute"): void {
+		if (this.agentMode === mode) return;
+		this.agentMode = mode;
+		this.renderState(getTodoStore().getState());
 	}
 
 	/**
@@ -148,9 +161,10 @@ export class TodoListComponent extends Container {
 		const completed = state.items.filter((i) => i.status === "completed").length;
 		const inProgress = state.items.filter((i) => i.status === "in_progress").length;
 
-		// Header line
+		// Header line — shows "Plan" in PLAN mode, "Tasks" in EXECUTE
 		const headerParts: string[] = [];
-		headerParts.push(defaultTheme.bold(defaultTheme.fg("accent", "Plan")));
+		const headerLabel = this.agentMode === "plan" ? "Plan" : "Tasks";
+		headerParts.push(defaultTheme.bold(defaultTheme.fg("accent", headerLabel)));
 		headerParts.push(defaultTheme.fg("dim", "—"));
 		headerParts.push(defaultTheme.fg("muted", `${completed}/${total} done`));
 		if (inProgress > 0) {

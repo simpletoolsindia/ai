@@ -130,6 +130,7 @@ import {
 	extractUserRequest,
 	verifyTurnCompletion,
 } from "../../core/verification.ts";
+import { getPersonaStore, type TurnObservation } from "../../core/persona.ts";
 import { TreeSelectorComponent } from "./components/tree-selector.ts";
 import { TrustSelectorComponent } from "./components/trust-selector.ts";
 import { UserMessageComponent } from "./components/user-message.ts";
@@ -700,6 +701,7 @@ export class InteractiveMode {
 		this.todoListComponent = new TodoListComponent();
 		this.todoListComponent.setSticky(true);
 		this.todoListComponent.setInvalidator(() => this.ui.requestRender());
+		this.todoListComponent.setMode(this.session.getMode());
 		this.todoContainer.addChild(this.todoListComponent);
 		this.ui.addChild(this.todoContainer);
 		this.ui.addChild(this.statusContainer);
@@ -3067,6 +3069,9 @@ export class InteractiveMode {
 				// Run verification loop: check if the agent completed the task correctly
 				await this.maybeRunVerificationLoop(event);
 
+				// Observe this turn for persona learning
+				this.observeTurnForPersona(event);
+
 				await this.checkShutdownRequested();
 
 				this.ui.requestRender();
@@ -3645,6 +3650,43 @@ export class InteractiveMode {
 
 	private _verificationLoops: number = 0;
 	private _verificationPending: boolean = false;
+
+	/**
+	 * Feed a turn into the persona learning system so the agent
+	 * builds a profile of the user's coding conventions, project
+	 * patterns, and workflow preferences over time.
+	 */
+	private observeTurnForPersona(event: { messages: import("@simpletoolsindiaorg/ai-agent").AgentMessage[] }): void {
+		try {
+			const messages = event.messages as unknown as import("@simpletoolsindiaorg/ai-provider").Message[];
+			const userInput = extractUserRequest(messages);
+			const assistantResponse = extractAssistantResponse(messages);
+
+			// Extract tool names from assistant response
+			const toolMatches = assistantResponse.matchAll(/\[Tool:\s*(\w+)/g);
+			const toolsUsed = Array.from(toolMatches, (m) => m[1]);
+
+			// Extract files modified from write/edit calls
+			const fileMatches = assistantResponse.matchAll(/\[Tool:\s*(?:write|edit).*?"(?:path|filePath)":\s*"([^"]+)"/g);
+			const filesModified = Array.from(fileMatches, (m) => m[1]);
+
+			const store = getPersonaStore();
+			store.observe({
+				userInput,
+				toolsUsed,
+				filesModified,
+				corrections: [], // filled by feedback from verification failures
+				mode: this.session.getMode() ?? "plan",
+			});
+
+			// Synthesize the persona skill once we have enough observations
+			if (store.isReady()) {
+				store.synthesizeSkill();
+			}
+		} catch {
+			// Persona observation is best-effort — never block the user
+		}
+	}
 
 	private async checkShutdownRequested(): Promise<void> {
 		if (!this.shutdownRequested) return;
@@ -6361,6 +6403,10 @@ export class InteractiveMode {
 		// Re-render the footer so the new mode badge appears right away.
 		this.footer.invalidate();
 		this.refreshWelcomePanel();
+		// Update the todo list header: "Plan" → "Tasks" or vice versa
+		if (this.todoListComponent) {
+			this.todoListComponent.setMode(next);
+		}
 		this.ui.requestRender();
 	}
 

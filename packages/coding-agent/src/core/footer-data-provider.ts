@@ -111,6 +111,8 @@ export class FooterDataProvider {
 	private reftableTablesListPath: string | null = null;
 	private branchChangeCallbacks = new Set<() => void>();
 	private availableProviderCount = 0;
+	/** Names of skills the agent has loaded (via read) in this session. */
+	private loadedSkills: string[] = [];
 	private refreshTimer: ReturnType<typeof setTimeout> | null = null;
 	private gitWatcherRetryTimer: ReturnType<typeof setTimeout> | null = null;
 	private refreshInFlight = false;
@@ -121,6 +123,16 @@ export class FooterDataProvider {
 		this.cwd = cwd;
 		this.gitPaths = findGitPaths(cwd);
 		this.setupGitWatcher();
+	}
+
+	/** Set the currently loaded skill names for display in the footer. */
+	setLoadedSkills(skills: string[]): void {
+		this.loadedSkills = skills;
+	}
+
+	/** Get the currently loaded skill names. */
+	getLoadedSkills(): string[] {
+		return this.loadedSkills;
 	}
 
 	/** Current git branch, null if not in repo, "detached" if detached HEAD */

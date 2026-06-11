@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "fs";
 import ignore from "ignore";
 import { basename, dirname, join, relative, resolve, sep } from "path";
 import { CONFIG_DIR_NAME, getAgentDir } from "../config.ts";
@@ -487,6 +487,8 @@ export function loadSkills(options: LoadSkillsOptions): LoadSkillsResult {
 	}
 
 	if (includeDefaults) {
+		// Install built-in skills first so they're available for loading
+		ensureBuiltinSkills(resolvedAgentDir);
 		addSkills(loadSkillsFromDirInternal(join(resolvedAgentDir, "skills"), "user", true));
 		addSkills(loadSkillsFromDirInternal(resolve(resolvedCwd, CONFIG_DIR_NAME, "skills"), "project", true));
 	}
@@ -543,4 +545,177 @@ export function loadSkills(options: LoadSkillsOptions): LoadSkillsResult {
 		skills: Array.from(skillMap.values()),
 		diagnostics: [...allDiagnostics, ...collisionDiagnostics],
 	};
+}
+
+// ── Built-in skill files (shipped with the agent, auto-installed) ──
+
+const BUILTIN_SKILLS: Record<string, string> = {
+	dev: `---
+name: dev
+description: Software development expertise — code design, implementation, refactoring, debugging, testing, and code review. Use when the user asks about writing code, fixing bugs, refactoring, or implementing features.
+---
+
+# Development Expert
+
+## Approach
+1. Understand first — read the relevant code before suggesting changes
+2. Check conventions — match existing patterns
+3. Keep it simple — prefer clarity over cleverness
+4. Test as you go — write or update tests with every change
+5. Handle errors — every function should handle or propagate errors
+
+## Code Quality
+- Functions should be small and single-purpose
+- No magic numbers; use named constants
+- Avoid deep nesting; extract helpers
+- Use guard clauses to flatten conditionals
+- Document public APIs with JSDoc
+
+## When Refactoring
+- Don't change behavior — only structure
+- Make one change at a time, verify tests pass
+- Rename for clarity — names should reveal intent
+`,
+	qa: `---
+name: qa
+description: Quality assurance and testing expertise — test strategy, test case design, automated testing, regression testing, test frameworks, and coverage analysis. Use when the user asks about testing, QA, test coverage, or test failures.
+---
+
+# QA Expert
+
+## Test Strategy
+1. Test pyramid — unit tests > integration tests > e2e tests
+2. Coverage targets — aim for 80%+ on critical paths
+3. Test behavior, not implementation
+
+## When Writing Tests
+- Arrange → Act → Assert: three clear sections
+- One logical assertion per test
+- Test names should describe the scenario
+- Test edge cases: empty inputs, nulls, boundary values, errors
+
+## When Debugging Test Failures
+- Isolate — reproduce with a minimal case
+- Check test assumptions
+- Check for test pollution
+- Look for flaky tests: timing, randomness, shared state
+`,
+	devops: `---
+name: devops
+description: DevOps and infrastructure expertise — CI/CD pipelines, Docker, Kubernetes, cloud deployment, monitoring, logging, infrastructure-as-code, and build systems. Use when the user asks about deployment, containers, pipelines, cloud, or infrastructure.
+---
+
+# DevOps Expert
+
+## Core Principles
+1. Infrastructure as Code — everything version-controlled
+2. Immutable deployments — deploy artifacts, not mutable servers
+3. Observability — logs, metrics, traces
+4. Least privilege — minimal permissions
+5. Automate everything — if you do it twice, script it
+
+## CI/CD Best Practices
+- Fast feedback loops: lint → test → build → deploy
+- Cache dependencies between runs
+- Run tests in parallel where possible
+- Fail fast — lint and unit tests before integration tests
+
+## Docker Guidelines
+- Multi-stage builds to minimize image size
+- Pin base image versions
+- Run as non-root user
+- Health checks for every container
+`,
+	"business-analyst": `---
+name: business-analyst
+description: Business analysis expertise — requirements gathering, stakeholder analysis, user stories, acceptance criteria, process mapping, and project scoping. Use when the user asks about requirements, user stories, project scope, feature definition, or business needs.
+---
+
+# Business Analyst Expert
+
+## Requirements Gathering
+1. Ask clarifying questions — who is the user? what problem?
+2. Distinguish needs from wants — must-haves before nice-to-haves
+3. Identify stakeholders — primary users, secondary users
+4. Prioritize with impact/effort
+
+## User Stories
+Format: As a <role>, I want <goal> so that <benefit>
+Good stories are: Independent, Negotiable, Valuable, Estimable, Small, Testable
+
+## Acceptance Criteria
+- Given / When / Then format
+- Specific, measurable, unambiguous
+- Include both happy path and edge cases
+`,
+	manager: `---
+name: manager
+description: Project management expertise — task breakdown, estimation, milestone planning, risk management, stakeholder communication, and team coordination. Use when the user asks about planning, sprint planning, task prioritization, timelines, or project organization.
+---
+
+# Project Manager Expert
+
+## Task Breakdown
+1. Start with the goal — what is the desired outcome?
+2. Decompose into milestones
+3. Break milestones into tasks (1-3 days each)
+4. Identify dependencies
+5. Estimate effort — S/M/L/XL or story points
+
+## Risk Management
+1. Identify risks — what could go wrong?
+2. Assess — probability × impact
+3. Mitigate — reduce probability or impact
+4. Contingency — plan B
+5. Monitor — review risks weekly
+`,
+	"tech-architect": `---
+name: tech-architect
+description: Technical architecture expertise — system design, architecture patterns, technology selection, API design, data modeling, scalability, security architecture, and technical decision-making. Use when the user asks about system design, architecture, technology choices, API design, or scalability.
+---
+
+# Technical Architect Expert
+
+## Architecture Principles
+1. Simple first — start with the simplest architecture
+2. Evolve intentionally — add complexity only when needed
+3. Separation of concerns — single responsibility
+4. Loose coupling — well-defined interfaces
+5. Design for change — isolate what's likely to change
+
+## System Design Process
+1. Clarify requirements — functional and non-functional
+2. Estimate scale — requests/sec, storage, ratios
+3. Define interfaces — APIs, events, contracts
+4. Choose data stores — SQL vs NoSQL, caching
+5. Design for failure — redundancy, failover
+6. Review tradeoffs — CAP theorem
+
+## API Design
+- RESTful: Resources over actions
+- Versioning: URL-based or header-based
+- Pagination: Cursor-based for large datasets
+- Errors: Consistent format with code, message, details
+`,
+};
+
+/**
+ * Ensure built-in skill files exist in the user's skills directory.
+ * Called during skills loading so the agent always has the 6 role-based
+ * skills available even after a fresh install.
+ */
+function ensureBuiltinSkills(agentDir: string): void {
+	try {
+		const skillsDir = join(agentDir, "skills");
+		mkdirSync(skillsDir, { recursive: true });
+		for (const [name, content] of Object.entries(BUILTIN_SKILLS)) {
+			const skillDir = join(skillsDir, name);
+			const skillFile = join(skillDir, "SKILL.md");
+			if (existsSync(skillFile)) continue; // Already exists — respect user edits
+			mkdirSync(skillDir, { recursive: true });
+			writeFileSync(skillFile, content);
+		}
+	} catch {
+		// Best-effort — don't crash if we can't write skills
+	}
 }

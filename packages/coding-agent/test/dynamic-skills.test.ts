@@ -7,7 +7,7 @@
  * and load them dynamically based on user queries.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeAll } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -85,6 +85,16 @@ const skills = [
 ];
 
 describe("Dynamic Role-based Skills", () => {
+	// Ensure skills exist before tests (loadSkills auto-creates them)
+	beforeAll(async () => {
+		const { loadSkills } = await import("../src/core/skills.ts");
+		loadSkills({
+			cwd: process.cwd(),
+			agentDir: join(homedir(), ".ai", "agent"),
+			skillPaths: [],
+			includeDefaults: true,
+		});
+	});
 	for (const skill of skills) {
 		describe(`Skill: ${skill.name}`, () => {
 			const filePath = join(SKILLS_DIR, skill.file);

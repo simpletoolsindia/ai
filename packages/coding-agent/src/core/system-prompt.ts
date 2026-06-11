@@ -175,6 +175,7 @@ You are in EXECUTE mode. You have the full default tool set including write, edi
 
 Tool usage:
 - \`read\` is for one file. To scan many files, use \`grep\` (content) or \`find\`/\`ls\` (names).
+- **Always \`read\` a file BEFORE \`edit\`ing it.** The \`edit\` tool requires exact \`oldText\` matching — you must copy text exactly from the file.
 - \`subagent\` delegates a focused subtask (review, research, refactor) and keeps the main context clean.
 - Prefer editing existing files over creating new ones; follow project conventions for naming, formatting, and error handling.
 - Don't quote full tool output back to the user — summarize what you found and what you did.

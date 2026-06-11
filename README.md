@@ -72,6 +72,14 @@ npm rebuild -g better-sqlite3
 
 Requirements: **Node 22+**, **macOS or Linux** (Windows works under WSL2). Full guide: [simpletoolsindia.github.io/ai/install](https://simpletoolsindia.github.io/ai/install).
 
+## Uninstall
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/simpletoolsindia/ai/main/uninstall.sh | bash
+# Or: bash uninstall.sh --force  (non-interactive)
+```
+This removes the binary, npm package, and all user data (~/.ai/).
+
 ---
 
 ## Quick start

@@ -27,6 +27,7 @@ export function restoreLineEndings(text: string, ending: "\r\n" | "\n"): string 
 /**
  * Normalize text for fuzzy matching. Applies progressive transformations:
  * - Strip trailing whitespace from each line
+ * - Normalize leading whitespace (any mix of tabs/spaces → single space)
  * - Normalize smart quotes to ASCII equivalents
  * - Normalize Unicode dashes/hyphens to ASCII hyphen
  * - Normalize special Unicode spaces to regular space
@@ -38,6 +39,8 @@ export function normalizeForFuzzyMatch(text: string): string {
 			// Strip trailing whitespace per line
 			.split("\n")
 			.map((line) => line.trimEnd())
+			// Normalize leading whitespace: any indentation → consistent
+			.map((line) => line.replace(/^[\t ]+/, (m) => " ".repeat(m.length)))
 			.join("\n")
 			// Smart single quotes → '
 			.replace(/[\u2018\u2019\u201A\u201B]/g, "'")
@@ -145,13 +148,17 @@ function countOccurrences(content: string, oldText: string): number {
 }
 
 function getNotFoundError(path: string, editIndex: number, totalEdits: number): Error {
+	const hint = `
+
+Tip: Use the \`read\` tool to see the exact file content before editing. The \`oldText\` must match EXACTLY — character for character including indentation, blank lines, and trailing spaces.
+  → read ${path}`;
 	if (totalEdits === 1) {
 		return new Error(
-			`Could not find the exact text in ${path}. The old text must match exactly including all whitespace and newlines.`,
+			`Could not find the exact text in ${path}. The old text must match exactly including all whitespace and newlines.${hint}`,
 		);
 	}
 	return new Error(
-		`Could not find edits[${editIndex}] in ${path}. The oldText must match exactly including all whitespace and newlines.`,
+		`Could not find edits[${editIndex}] in ${path}. The oldText must match exactly including all whitespace and newlines.${hint}`,
 	);
 }
 

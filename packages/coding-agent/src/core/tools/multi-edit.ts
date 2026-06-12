@@ -247,7 +247,7 @@ export function createMultiEditToolDefinition(
 						const buffer = await operations.readFile(absolutePath);
 						const rawContent = buffer.toString("utf-8");
 						const lineEnding = detectLineEnding(rawContent);
-						const content = stripBom(normalizeToLF(rawContent));
+						const { text: content } = stripBom(normalizeToLF(rawContent));
 
 						// Apply edits
 						const { newContent } = applyEditsToNormalizedContent(content, editList, fileEdit.path);

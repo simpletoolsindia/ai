@@ -319,7 +319,7 @@ export function createTestToolDefinition(_cwd: string): ToolDefinition<typeof te
 				// Wait for completion
 				const exitCode = await waitForChildProcess(child);
 
-				if (context.signal?.aborted) {
+				if (signal?.aborted) {
 					throw new Error("aborted");
 				}
 				if (timedOut) {

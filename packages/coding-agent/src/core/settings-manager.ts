@@ -100,6 +100,21 @@ export type PackageSource =
 			themes?: string[];
 	  };
 
+export interface LocalOtelSettings {
+	/** Enable the local OpenTelemetry-style logger. Default: false (zero overhead). */
+	enabled?: boolean;
+	/** File path to append JSONL spans to. Default: ~/.ai/agent/logs/ai-otel-<YYYY-MM-DD>.jsonl */
+	logPath?: string;
+	/** Include full LLM prompts and responses. Default: true. When false, only metadata (model, tokens, duration) is recorded. */
+	includePromptsAndResponses?: boolean;
+	/** Truncate prompts/responses at this many bytes to keep logs small. Default: 100_000 (~100 KB). */
+	maxPromptBytes?: number;
+	/** Include tool-call args and results. Default: true. */
+	includeToolIO?: boolean;
+	/** Write each turn to a new file. Default: false (append to a single file per day). */
+	rotatePerSession?: boolean;
+}
+
 export interface Settings {
 	lastChangelogVersion?: string;
 	defaultProvider?: string;
@@ -126,7 +141,10 @@ export interface Settings {
 	shellCommandPrefix?: string; // Prefix prepended to every bash command (e.g., "shopt -s expand_aliases" for alias support)
 	npmCommand?: string[]; // Command used for npm package lookup/install operations, argv-style (e.g., ["mise", "exec", "node@20", "--", "npm"])
 	collapseChangelog?: boolean; // Show condensed changelog after update (use /changelog for full)
-	enableInstallTelemetry?: boolean; // default: true - anonymous version/update ping after changelog-detected updates
+	enableInstallTelemetry?: boolean; // default: false (as of 0.85.0) — the install-telemetry fetch was removed; this flag is kept as a no-op for back-compat. Use `localOtel` for local observability.
+	enableVersionCheck?: boolean; // default: false — opt-in: ask the upstream API if a newer ai version is available
+	localOtel?: LocalOtelSettings; // Local OpenTelemetry-style structured logs written to disk (opt-in)
+	shareViewerUrl?: string; // override the base URL for /share (default: https://api.simpletoolsindiaorg.invalid/session/)
 	packages?: PackageSource[]; // Array of npm/git package sources (string or object with filtering)
 	extensions?: string[]; // Array of local extension file paths or directories
 	skills?: string[]; // Array of local skill file paths or directories
@@ -953,13 +971,42 @@ export class SettingsManager {
 	}
 
 	getEnableInstallTelemetry(): boolean {
-		return this.settings.enableInstallTelemetry ?? true;
+		// As of 0.85.0 the install-telemetry fetch is removed. This getter
+		// is kept as a no-op for back-compat with existing settings.json
+		// files; it always returns false so any old "true" value is
+		// ignored.
+		return false;
 	}
 
 	setEnableInstallTelemetry(enabled: boolean): void {
+		// No-op. The install-telemetry fetch was removed in 0.85.0.
+		// We still write the setting to disk so old code paths that
+		// read it don't crash, but the value is ignored.
 		this.globalSettings.enableInstallTelemetry = enabled;
 		this.markModified("enableInstallTelemetry");
 		this.save();
+	}
+
+	getEnableVersionCheck(): boolean {
+		return this.settings.enableVersionCheck ?? false;
+	}
+
+	setEnableVersionCheck(enabled: boolean): void {
+		this.globalSettings.enableVersionCheck = enabled;
+		this.markModified("enableVersionCheck");
+		this.save();
+	}
+
+	getLocalOtel(): Required<LocalOtelSettings> {
+		const s = this.settings.localOtel ?? {};
+		return {
+			enabled: s.enabled === true,
+			logPath: typeof s.logPath === "string" && s.logPath ? s.logPath : "",
+			includePromptsAndResponses: s.includePromptsAndResponses !== false,
+			maxPromptBytes: typeof s.maxPromptBytes === "number" && s.maxPromptBytes > 0 ? s.maxPromptBytes : 100_000,
+			includeToolIO: s.includeToolIO !== false,
+			rotatePerSession: s.rotatePerSession === true,
+		};
 	}
 
 	getPackages(): PackageSource[] {

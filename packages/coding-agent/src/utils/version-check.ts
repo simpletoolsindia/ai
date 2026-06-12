@@ -55,8 +55,14 @@ export function isNewerPackageVersion(candidateVersion: string, currentVersion: 
 
 export async function getLatestAiRelease(
 	currentVersion: string,
-	options: { timeoutMs?: number } = {},
+	options: { timeoutMs?: number; enabled?: boolean } = {},
 ): Promise<LatestAiRelease | undefined> {
+	// As of 0.85.0, the upstream version check is OPT-IN.
+	// Callers must explicitly pass `enabled: true` (or set the
+	// `enableVersionCheck` setting) to perform the remote request.
+	// This stops the silent 10s remote call that used to run on
+	// every startup.
+	if (!options.enabled) return undefined;
 	if (process.env.AI_SKIP_VERSION_CHECK || process.env.AI_OFFLINE) return undefined;
 
 	const response = await fetch(LATEST_VERSION_URL, {
@@ -93,9 +99,12 @@ export async function getLatestAiVersion(
 	return (await getLatestAiRelease(currentVersion, options))?.version;
 }
 
-export async function checkForNewAiVersion(currentVersion: string): Promise<LatestAiRelease | undefined> {
+export async function checkForNewAiVersion(
+	currentVersion: string,
+	options: { enabled?: boolean } = {},
+): Promise<LatestAiRelease | undefined> {
 	try {
-		const latestRelease = await getLatestAiRelease(currentVersion);
+		const latestRelease = await getLatestAiRelease(currentVersion, options);
 		if (latestRelease && isNewerPackageVersion(latestRelease.version, currentVersion)) {
 			return latestRelease;
 		}

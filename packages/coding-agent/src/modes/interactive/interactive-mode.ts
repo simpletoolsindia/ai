@@ -78,6 +78,7 @@ import { type AppKeybinding, KeybindingsManager } from "../../core/keybindings.t
 import { createCompactionSummaryMessage } from "../../core/messages.ts";
 import { defaultModelPerProvider, findExactModelReferenceMatch, resolveModelScope } from "../../core/model-resolver.ts";
 import { DefaultPackageManager } from "../../core/package-manager.ts";
+import { getPersonaStore, type TurnObservation } from "../../core/persona.ts";
 import { BUILT_IN_PROVIDER_DISPLAY_NAMES } from "../../core/provider-display-names.ts";
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
 import { formatMissingSessionCwdPrompt, MissingSessionCwdError } from "../../core/session-cwd.ts";
@@ -88,7 +89,12 @@ import { isInstallTelemetryEnabled } from "../../core/telemetry.ts";
 import { formatTodoListForLlm, getTodoStore } from "../../core/todo/store.ts";
 import type { TruncationResult } from "../../core/tools/truncate.ts";
 import { hasProjectConfigDir, hasProjectTrustInputs, ProjectTrustStore } from "../../core/trust-manager.ts";
-import { getAiUserAgent } from "../../utils/ai-user-agent.ts";
+import {
+	extractAssistantResponse,
+	extractToolResults,
+	extractUserRequest,
+	verifyTurnCompletion,
+} from "../../core/verification.ts";
 import { getChangelogPath, getNewEntries, parseChangelog } from "../../utils/changelog.ts";
 import { copyToClipboard } from "../../utils/clipboard.ts";
 import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipboard-image.ts";
@@ -122,19 +128,12 @@ import { SessionSelectorComponent } from "./components/session-selector.ts";
 import { SettingsSelectorComponent } from "./components/settings-selector.ts";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.ts";
 import { TodoListComponent } from "./components/todo-list.ts";
-import { WelcomePanel, type WelcomeInputs } from "./components/welcome.ts";
 import { ToolExecutionComponent } from "./components/tool-execution.ts";
-import {
-	extractAssistantResponse,
-	extractToolResults,
-	extractUserRequest,
-	verifyTurnCompletion,
-} from "../../core/verification.ts";
-import { getPersonaStore, type TurnObservation } from "../../core/persona.ts";
 import { TreeSelectorComponent } from "./components/tree-selector.ts";
 import { TrustSelectorComponent } from "./components/trust-selector.ts";
 import { UserMessageComponent } from "./components/user-message.ts";
 import { UserMessageSelectorComponent } from "./components/user-message-selector.ts";
+import { type WelcomeInputs, WelcomePanel } from "./components/welcome.ts";
 import {
 	getAvailableThemes,
 	getAvailableThemesWithPaths,
@@ -761,12 +760,17 @@ export class InteractiveMode {
 	async run(): Promise<void> {
 		await this.init();
 
-		// Start version check asynchronously
-		checkForNewAiVersion(this.version).then((newRelease) => {
-			if (newRelease) {
-				this.showNewVersionNotification(newRelease);
-			}
-		});
+		// Start version check asynchronously. As of 0.85.0, the version
+		// check is opt-in via `enableVersionCheck` in settings.json. The
+		// 10s remote request no longer runs by default.
+		const versionCheckEnabled = this.settingsManager.getEnableVersionCheck();
+		if (versionCheckEnabled) {
+			checkForNewAiVersion(this.version, { enabled: true }).then((newRelease) => {
+				if (newRelease) {
+					this.showNewVersionNotification(newRelease);
+				}
+			});
+		}
 
 		// Start package update check asynchronously
 		this.checkForPackageUpdates().then((updates) => {
@@ -930,22 +934,12 @@ export class InteractiveMode {
 	}
 
 	private reportInstallTelemetry(version: string): void {
-		if (process.env.AI_OFFLINE) {
-			return;
-		}
-
-		if (!isInstallTelemetryEnabled(this.settingsManager)) {
-			return;
-		}
-
-		void fetch(`https://api.simpletoolsindiaorg.invalid/report-install?version=${encodeURIComponent(version)}`, {
-			headers: {
-				"User-Agent": getAiUserAgent(version),
-			},
-			signal: AbortSignal.timeout(5000),
-		})
-			.then(() => undefined)
-			.catch(() => undefined);
+		// No-op as of 0.85.0. The install-telemetry fetch to
+		// api.simpletoolsindiaorg.invalid/report-install was removed; ai no
+		// longer pings a remote endpoint on startup or on update. For local
+		// observability enable `localOtel` in settings.json.
+		void version;
+		void isInstallTelemetryEnabled; // keep the import alive for back-compat
 	}
 
 	private getMarkdownThemeWithSettings(): MarkdownTheme {
@@ -1533,9 +1527,7 @@ export class InteractiveMode {
 				}
 				if (infoNotes.length > 0) {
 					const noteLines = this.formatDiagnostics(infoNotes, sourceInfos);
-					this.chatContainer.addChild(
-						new Text(`${theme.fg("muted", "[Skill notes]")}\n${noteLines}`, 0, 0),
-					);
+					this.chatContainer.addChild(new Text(`${theme.fg("muted", "[Skill notes]")}\n${noteLines}`, 0, 0));
 					this.chatContainer.addChild(new Spacer(1));
 				}
 			}
@@ -1790,11 +1782,7 @@ export class InteractiveMode {
 	}
 
 	private getWorkingLoaderMessage(): string {
-		return (
-			this.workingMessage ??
-			this.dynamicWorkingMessage ??
-			this.defaultWorkingMessage
-		);
+		return this.workingMessage ?? this.dynamicWorkingMessage ?? this.defaultWorkingMessage;
 	}
 
 	/**
@@ -1871,9 +1859,7 @@ export class InteractiveMode {
 	private setDynamicWorkingMessage(phase: keyof typeof this.dynamicWorkingMessages): void {
 		this.dynamicWorkingMessage = this.dynamicWorkingMessages[phase];
 		if (this.loadingAnimation) {
-			this.loadingAnimation.setMessage(
-				`${this.dynamicWorkingMessage} (${keyText("app.interrupt")} to interrupt)`,
-			);
+			this.loadingAnimation.setMessage(`${this.dynamicWorkingMessage} (${keyText("app.interrupt")} to interrupt)`);
 		}
 	}
 
@@ -2796,7 +2782,13 @@ export class InteractiveMode {
 				return;
 			}
 			if (text === "/mode" || text.startsWith("/mode ")) {
-				const arg = text === "/mode" ? "" : text.replace(/^\/mode\s*/, "").trim().toLowerCase();
+				const arg =
+					text === "/mode"
+						? ""
+						: text
+								.replace(/^\/mode\s*/, "")
+								.trim()
+								.toLowerCase();
 				this.editor.setText("");
 				this.handleModeCommand(arg);
 				return;
@@ -3058,11 +3050,7 @@ export class InteractiveMode {
 				// PLAN-mode hint: after the agent finishes a turn in PLAN mode
 				// with a plan on the todo list, surface a prominent prompt
 				// telling the user to press Tab to start executing.
-				if (
-					this.session.getMode() === "plan" &&
-					this.todoContainer &&
-					getTodoStore().getState().items.length > 0
-				) {
+				if (this.session.getMode() === "plan" && this.todoContainer && getTodoStore().getState().items.length > 0) {
 					this.maybeShowPlanReadyHint();
 				}
 				this.ui.requestRender();
@@ -3095,9 +3083,7 @@ export class InteractiveMode {
 				this.setDynamicWorkingMessage("executing");
 				this.workingMessage = `⚡ ${friendly}`;
 				if (this.loadingAnimation) {
-					this.loadingAnimation.setMessage(
-						`${this.workingMessage} (${keyText("app.interrupt")} to interrupt)`,
-					);
+					this.loadingAnimation.setMessage(`${this.workingMessage} (${keyText("app.interrupt")} to interrupt)`);
 				}
 				// Update footer with current tool info
 				this.footerDataProvider.setCurrentTool(event.toolName);
@@ -3127,7 +3113,7 @@ export class InteractiveMode {
 									? [{ type: "text" as const, text: `⚠️ ${event.toolName} failed — agent will retry` }]
 									: `⚠️ ${event.toolName} failed — agent will retry`,
 								isError: true,
-						  }
+							}
 						: event.result;
 					component.updateResult({ ...displayResult, isError: event.isError });
 					this.pendingTools.delete(event.toolCallId);
@@ -3674,7 +3660,9 @@ export class InteractiveMode {
 	 * continues the loop. Tracks verification loop count to prevent
 	 * infinite loops. Uses deferred submission to avoid stack overflow.
 	 */
-	private async maybeRunVerificationLoop(event: { messages: import("@simpletoolsindiaorg/ai-agent").AgentMessage[] }): Promise<void> {
+	private async maybeRunVerificationLoop(event: {
+		messages: import("@simpletoolsindiaorg/ai-agent").AgentMessage[];
+	}): Promise<void> {
 		// Guard: don't run verification while a verification is already pending
 		if (this._verificationPending) return;
 
@@ -3719,7 +3707,10 @@ export class InteractiveMode {
 
 			// Verification failed — defer feedback to prevent recursion
 			this._verificationLoops += 1;
-			const issues = result.issues.slice(0, 5).map((i) => `- ${i}`).join("\n");
+			const issues = result.issues
+				.slice(0, 5)
+				.map((i) => `- ${i}`)
+				.join("\n");
 			const feedback = [
 				`🔍 Verification check #${this._verificationLoops}: The previous turn had issues that need to be fixed.`,
 				"",
@@ -5126,19 +5117,13 @@ export class InteractiveMode {
 
 			// Step 4: model ID
 			const modelId = (
-				await dialog.showPrompt(
-					"Model ID (the exact model name your provider expects):",
-					"model-name",
-				)
+				await dialog.showPrompt("Model ID (the exact model name your provider expects):", "model-name")
 			).trim();
 			if (!modelId) throw new Error("Model ID is required");
 
 			// Step 5: optional human-readable name
 			const modelNameRaw = (
-				await dialog.showPrompt(
-					"Human-readable model name (optional — press Enter to use the model ID):",
-					modelId,
-				)
+				await dialog.showPrompt("Human-readable model name (optional — press Enter to use the model ID):", modelId)
 			).trim();
 
 			// Persist + refresh
@@ -5842,9 +5827,7 @@ export class InteractiveMode {
 		if (!arg) {
 			// No arg: show current and a usage hint.
 			if (currentUrl) {
-				this.showStatus(
-					`SearXNG endpoint: ${currentUrl}  (from models.json). To change: /searcheng <url>`,
-				);
+				this.showStatus(`SearXNG endpoint: ${currentUrl}  (from models.json). To change: /searcheng <url>`);
 			} else {
 				this.showStatus(
 					`SearXNG endpoint: not configured in models.json (using built-in default ${defaultUrl}). To set: /searcheng <url>`,
@@ -5891,9 +5874,7 @@ export class InteractiveMode {
 			headers: writeResult.headers ?? current?.headers,
 		});
 
-		this.showStatus(
-			`Saved SearXNG endpoint: ${url.normalized}. The next websearch call will use it.`,
-		);
+		this.showStatus(`Saved SearXNG endpoint: ${url.normalized}. The next websearch call will use it.`);
 		this.ui.requestRender();
 	}
 
@@ -5901,9 +5882,7 @@ export class InteractiveMode {
 	 * Validate a URL the user typed for /searcheng. Returns either
 	 * `{ ok: true, normalized }` or `{ ok: false, error }`.
 	 */
-	private validateWebsearchUrl(input: string):
-		| { ok: true; normalized: string }
-		| { ok: false; error: string } {
+	private validateWebsearchUrl(input: string): { ok: true; normalized: string } | { ok: false; error: string } {
 		const trimmed = input.trim();
 		if (!trimmed) return { ok: false, error: "URL is empty" };
 		let parsed: URL;
@@ -5941,9 +5920,7 @@ export class InteractiveMode {
 	 * otherwise. We do NOT fail the save on a probe failure (the user
 	 * may be intentionally setting an offline / behind-auth URL).
 	 */
-	private async probeSearxng(
-		url: string,
-	): Promise<{ ok: true; status: number } | { ok: false; error: string }> {
+	private async probeSearxng(url: string): Promise<{ ok: true; status: number } | { ok: false; error: string }> {
 		const controller = new AbortController();
 		const timer = setTimeout(() => controller.abort(new Error("probe timed out")), 5000);
 		try {
@@ -5973,9 +5950,7 @@ export class InteractiveMode {
 	 * explicitly cleared them. Returns the resolved config so the
 	 * caller can update the in-memory registry.
 	 */
-	private async writeSearxngToModelsJson(
-		baseUrl: string,
-	): Promise<
+	private async writeSearxngToModelsJson(baseUrl: string): Promise<
 		| {
 				ok: true;
 				maxResults?: number;
@@ -6017,14 +5992,10 @@ export class InteractiveMode {
 				ok: true,
 				maxResults: typeof maxResultsRaw === "number" ? maxResultsRaw : undefined,
 				language: typeof languageRaw === "string" ? languageRaw : undefined,
-				safesearch: safesearchRaw === "0" || safesearchRaw === "1" || safesearchRaw === "2"
-					? safesearchRaw
-					: undefined,
+				safesearch:
+					safesearchRaw === "0" || safesearchRaw === "1" || safesearchRaw === "2" ? safesearchRaw : undefined,
 				timeRange:
-					timeRangeRaw === "day" ||
-					timeRangeRaw === "week" ||
-					timeRangeRaw === "month" ||
-					timeRangeRaw === "year"
+					timeRangeRaw === "day" || timeRangeRaw === "week" || timeRangeRaw === "month" || timeRangeRaw === "year"
 						? timeRangeRaw
 						: undefined,
 				headers:
@@ -6036,7 +6007,6 @@ export class InteractiveMode {
 			return { ok: false, error: err instanceof Error ? err.message : String(err) };
 		}
 	}
-
 
 	private handleSessionCommand(): void {
 		const stats = this.session.getSessionStats();
@@ -6511,9 +6481,11 @@ export class InteractiveMode {
 			const todoState = getTodoStore().getState();
 			if (todoState.items.length > 0) {
 				// Submit a prompt to start executing the plan
-				this.session.prompt(
-					"Execute the plan from the todo list. Work through each item in order, marking each in_progress when you start and completed when done.",
-				).catch(() => {});
+				this.session
+					.prompt(
+						"Execute the plan from the todo list. Work through each item in order, marking each in_progress when you start and completed when done.",
+					)
+					.catch(() => {});
 			}
 		}
 
@@ -6556,7 +6528,6 @@ export class InteractiveMode {
 		// insert the new header after it; fall back to append.
 		let insertIndex = this.headerContainer.children.length;
 		for (let i = 0; i < this.headerContainer.children.length; i += 1) {
-			// @ts-ignore -- private children but we control the structure
 			if (this.headerContainer.children[i] instanceof Spacer) {
 				insertIndex = i + 1;
 				break;
@@ -6564,7 +6535,6 @@ export class InteractiveMode {
 		}
 		// Container.addChild appends; we want to insert at a specific
 		// index. Splice manually.
-		// @ts-ignore
 		this.headerContainer.children.splice(insertIndex, 0, fresh);
 		this.builtInHeader = fresh;
 		this.ui.requestRender();
@@ -6588,10 +6558,7 @@ export class InteractiveMode {
 		const hint = new Container();
 		hint.addChild(
 			new Text(
-				theme.fg(
-					"accent",
-					`  ${theme.bold("✓ Plan ready")}  —  press `,
-				) +
+				theme.fg("accent", `  ${theme.bold("✓ Plan ready")}  —  press `) +
 					theme.bold(theme.fg("warning", "Tab")) +
 					theme.fg("accent", " or run `") +
 					theme.bold(theme.fg("warning", "/mode execute")) +
@@ -6610,7 +6577,8 @@ export class InteractiveMode {
 	 * usage hints. Pulled from `BUILTIN_SLASH_COMMANDS` and grouped by
 	 * category for easier scanning.
 	 */
-	private handleHelpCommand(): void {		const commands = BUILTIN_SLASH_COMMANDS;
+	private handleHelpCommand(): void {
+		const commands = BUILTIN_SLASH_COMMANDS;
 		// Group commands by category using a simple heuristic on the
 		// command name. Keeps the help output organized even when the
 		// underlying command list grows.
@@ -6618,20 +6586,22 @@ export class InteractiveMode {
 			{
 				title: "Session",
 				items: commands.filter((c) =>
-					["new", "clear", "resume", "tree", "rename", "fork", "clone", "delete", "name", "session"].includes(c.name),
+					["new", "clear", "resume", "tree", "rename", "fork", "clone", "delete", "name", "session"].includes(
+						c.name,
+					),
 				),
 			},
 			{
 				title: "Mode & Tools",
 				items: commands.filter((c) =>
-					["mode", "model", "scoped-models", "scopes", "tools", "compact", "todos", "todo", "clear-todo"].includes(c.name),
+					["mode", "model", "scoped-models", "scopes", "tools", "compact", "todos", "todo", "clear-todo"].includes(
+						c.name,
+					),
 				),
 			},
 			{
 				title: "Search & Memory",
-				items: commands.filter((c) =>
-					["searcheng", "websearch", "webfetch", "memory", "skills"].includes(c.name),
-				),
+				items: commands.filter((c) => ["searcheng", "websearch", "webfetch", "memory", "skills"].includes(c.name)),
 			},
 			{
 				title: "Sharing & Export",
@@ -6646,7 +6616,9 @@ export class InteractiveMode {
 			{
 				title: "Configuration",
 				items: commands.filter((c) =>
-					["settings", "hotkeys", "trust", "scout", "install", "reload", "theme", "changelog", "help"].includes(c.name),
+					["settings", "hotkeys", "trust", "scout", "install", "reload", "theme", "changelog", "help"].includes(
+						c.name,
+					),
 				),
 			},
 		];

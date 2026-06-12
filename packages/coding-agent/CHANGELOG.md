@@ -2,6 +2,49 @@
 
 > **Fork notice:** This is the changelog for **ai**, a fork of [pi](https://github.com/earendil-works/pi). Entries up to and including v0.78.1 are inherited verbatim from the upstream pi project. Starting with the first ai release, new entries are added by this fork. See [NOTICE.md](https://github.com/simpletoolsindiaorg/ai/blob/main/NOTICE.md) for the full fork attribution.
 
+## [0.85.0] - 2026-06-12
+
+Bug fixes, install refactor, perf, and a local OpenTelemetry-style logger. No data leaves the machine unless the user explicitly runs `ai update`, `ai install`, `/share`, or enables the version check.
+
+### Privacy & Remote Calls
+
+- **Removed the install-telemetry fetch** to `api.simpletoolsindiaorg.invalid/report-install`. The setting `enableInstallTelemetry` is kept as a no-op for back-compat but no longer does anything.
+- **Version check is now opt-in.** Set `enableVersionCheck: true` in `settings.json` to be notified of new versions, otherwise no remote request is made. The previous behavior (silent 10s ping on every startup) is gone.
+- The `enableInstallTelemetry` and `enableVersionCheck` settings were added; `shareViewerUrl` is now overridable.
+- The `/share` feature still uses the upstream share viewer, but only when the user explicitly runs `/share`.
+
+### New Features
+
+- **`localOtel` extension** — opt-in OpenTelemetry-style structured logger. Enable in `settings.json` under `localOtel.enabled: true`. Captures spans for every agent turn, LLM call (full prompt + response), and tool call (name, args, result). Writes JSONL to `~/.ai/agent/logs/ai-otel-<DATE>.jsonl` (configurable). View with `/logs`, tail with `/logs tail [N]`, change path with `/logs path <P>`. Off by default — zero overhead when disabled.
+- New slash command `/logs` (also accepts `/logs on|off|tail|path`).
+- The `before_provider_request` / `after_provider_response` events are now observed end-to-end: every LLM call writes a `llm.call` span with the full prompt, completion, token usage, and model id.
+
+### Bug Fixes
+
+- **Bootstrap default `models.json`** — when `~/.ai/agent/models.json` is missing, write a sensible default (Ollama auto-discover + commented-out LM Studio / vLLM / cloud provider examples) so the model picker is never empty on a fresh install.
+- `expandTildePath` no longer silently drops the leading `~` — it now actually expands `~` and `~/` to `$HOME`.
+- Startup now logs the resolved agent dir, auth.json / models.json / settings.json presence, and the list of configured providers so users can verify where their data is stored.
+
+### Install / Uninstall
+
+- `install.sh` now defaults to `npm install -g` (no git, no build, no source on disk). `--from-source` and `--from-binary` remain as opt-ins.
+- `uninstall.sh` now preserves `~/.ai/agent/` by default; pass `--purge` to wipe. Both scripts keep at most 5 most recent user-data backups under `~/ai.backup-*`.
+
+### Performance
+
+- Diff generation for large files (>256 KB) now runs in a `worker_threads` worker (see `packages/coding-agent/src/core/tools/diff-worker.ts`), so the TUI doesn't block on Myers diff for large edits.
+- `--profile` CLI flag: prints per-phase startup timing to stderr (equivalent to `PI_TIMING=1`).
+
+### UX
+
+- Per-tool descriptive loading message in the spinner (e.g. "Reading src/foo.ts", "Running npm test") instead of a generic spinner. Implemented in `getToolWorkingMessage(toolName, args)`.
+- Edit tool: stronger guidance to prefer `replaceLines` over `edits[].oldText`, and a soft guard that refuses edits whose `oldText` covers more than 30% of the file (with a hint to use `write` or `replaceLines` instead).
+- System prompt rewritten for clarity and brevity (~30% shorter) with explicit guidance on `replaceLines` vs `oldText`, the 30% threshold, and the `resolveDocs` tool.
+
+### Other
+
+- Two new built-in extensions, opt-in via settings: `docsResolver` (fetches npm / GitHub READMEs on demand) and `patternLearner` (observes tool calls in a worker thread, persists learned patterns to `~/.ai/agent/patterns/`, injects a `<user_patterns>` hint into the system prompt via `before_agent_start`).
+
 ## [0.80.1] - 2026-06-11
 
 Verification loop, dynamic role-based skills, MCP server integration, and performance hardening. This is the first release that validates its own output before ending a turn.

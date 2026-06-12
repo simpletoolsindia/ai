@@ -15,6 +15,7 @@ import docsResolverFactory from "./extensions/built-in/docs-resolver/index.ts";
 // Each built-in is a factory `(pi) => void` that follows the same shape
 // as a user-extension's default export.
 import hermesMemoryFactory from "./extensions/built-in/hermes-memory/index.ts";
+import localOtelFactory from "./extensions/built-in/local-otel/index.ts";
 import patternLearnerFactory from "./extensions/built-in/pattern-learner/index.ts";
 import type { ExtensionFactory } from "./extensions/types.ts";
 
@@ -35,6 +36,7 @@ export const BUILT_IN_EXTENSION_FACTORIES: ExtensionFactory[] = [
 	contextModeFactory,
 	docsResolverFactory,
 	patternLearnerFactory,
+	localOtelFactory,
 ];
 
 /**
@@ -46,4 +48,5 @@ export const BUILT_IN_EXTENSION_IDS: readonly string[] = [
 	"context-mode",
 	"docs-resolver",
 	"pattern-learner",
+	"local-otel",
 ] as const;

@@ -304,16 +304,16 @@ export function createTestToolDefinition(_cwd: string): ToolDefinition<typeof te
 				}
 
 				// Stream output
-				child.stdout?.on("data", (data) => accumulator.add(data));
-				child.stderr?.on("data", (data) => accumulator.add(data));
+				child.stdout?.on("data", (data) => accumulator.append(data));
+				child.stderr?.on("data", (data) => accumulator.append(data));
 
 				// Handle abort signal
 				const onAbort = () => {
 					if (child.pid) killProcessTree(child.pid);
 				};
-				if (context.signal) {
-					if (context.signal.aborted) onAbort();
-					else context.signal.addEventListener("abort", onAbort, { once: true });
+				if (signal) {
+					if (signal.aborted) onAbort();
+					else signal.addEventListener("abort", onAbort, { once: true });
 				}
 
 				// Wait for completion
@@ -327,8 +327,10 @@ export function createTestToolDefinition(_cwd: string): ToolDefinition<typeof te
 				}
 
 				// Get output
-				const output = accumulator.getText();
-				const truncation = accumulator.getTruncation();
+				accumulator.finish();
+				const snapshot = accumulator.snapshot();
+				const output = snapshot.content;
+				const truncation = snapshot.truncation;
 
 				return {
 					content: [{ type: "text", text: output }],

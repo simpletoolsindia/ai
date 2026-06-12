@@ -153,7 +153,7 @@ async function convertReplaceLinesInput(
 	await operations.access(absolutePath);
 	const buffer = await operations.readFile(absolutePath);
 	const rawContent = buffer.toString("utf-8");
-	const content = stripBom(normalizeToLF(rawContent));
+	const { text: content } = stripBom(normalizeToLF(rawContent));
 	const lines = content.split("\n");
 
 	return input.replaceLines.map((rl) => {
@@ -250,10 +250,8 @@ export function createMultiEditToolDefinition(
 						const content = stripBom(normalizeToLF(rawContent));
 
 						// Apply edits
-						const { newContent, appliedCount } = applyEditsToNormalizedContent(content, editList);
-						if (appliedCount === 0) {
-							throw new Error(`No edits matched in ${fileEdit.path}`);
-						}
+						const { newContent } = applyEditsToNormalizedContent(content, editList, fileEdit.path);
+						const appliedCount = editList.length;
 
 						// Restore line endings and write
 						const restoredContent = restoreLineEndings(newContent, lineEnding);

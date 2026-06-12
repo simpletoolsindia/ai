@@ -468,7 +468,22 @@ export const streamSimpleOpenAICompletions: StreamFunction<"openai-completions",
 				}
 				stream.end();
 			} catch (error) {
-				stream.push({ type: "error", error: error instanceof Error ? error : new Error(String(error)) });
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				stream.push({ 
+					type: "error", 
+					reason: "error",
+					error: {
+						role: "assistant",
+						content: [{ type: "text", text: errorMessage }],
+						api: "openai-completions",
+						provider: model.provider,
+						model: model.id,
+						usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+						stopReason: "error",
+						errorMessage,
+						timestamp: Date.now(),
+					}
+				});
 				stream.end();
 			} finally {
 				releaseConnection(model.baseUrl);
@@ -608,7 +623,7 @@ function buildParams(
 	// Local model optimizations (Ollama, LM Studio, vLLM, etc.)
 	// Apply keep_alive, num_ctx, and other optimizations for local models
 	if (isLocalModel(model)) {
-		const optimizedParams = applyLocalModelOptimizations(params as Record<string, unknown>, model);
+		const optimizedParams = applyLocalModelOptimizations(params as unknown as Record<string, unknown>, model);
 		Object.assign(params, optimizedParams);
 	}
 

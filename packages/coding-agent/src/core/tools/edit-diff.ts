@@ -518,8 +518,11 @@ export async function computeEditsDiff(
 		const normalizedContent = normalizeToLF(content);
 		const { baseContent, newContent } = applyEditsToNormalizedContent(normalizedContent, edits, path);
 
-		// Generate the diff
-		return generateDiffString(baseContent, newContent);
+		// Generate the diff. For very large files, the diff is computed in
+		// a worker thread (see diff-worker.ts) so the TUI render thread
+		// doesn't block on Myers diff.
+		const { runDisplayDiffInWorker } = await import("./diff-worker.ts");
+		return await runDisplayDiffInWorker(baseContent, newContent);
 	} catch (err) {
 		return { error: err instanceof Error ? err.message : String(err) };
 	}

@@ -24,7 +24,7 @@ import { dirname, join } from "path";
 import { type Static, Type } from "typebox";
 import { Compile } from "typebox/compile";
 import type { TLocalizedValidationError } from "typebox/error";
-import { getAgentDir } from "../config.ts";
+import { getAgentDir, getDefaultModelsConfigPath } from "../config.ts";
 import { warnDeprecation } from "../utils/deprecation.ts";
 import { stripJsonComments } from "../utils/json.ts";
 import { normalizePath } from "../utils/paths.ts";
@@ -500,6 +500,47 @@ export class ModelRegistry {
 
 	static inMemory(authStorage: AuthStorage): ModelRegistry {
 		return new ModelRegistry(authStorage, undefined);
+	}
+
+	/**
+	 * If `modelsJsonPath` does not exist, write the bundled default
+	 * (`core/assets/default-models.json`) to that location. The default ships
+	 * with Ollama auto-discover enabled and commented-out examples for LM
+	 * Studio / vLLM / cloud providers, so the model picker is never empty on
+	 * a fresh install or after a full `~/.ai` reset.
+	 *
+	 * - Skips silently if the file already exists (we never clobber).
+	 * - Skips if the bundled default can't be found (broken install).
+	 * - Returns `{ written: true }` only when a new file was actually written.
+	 * - Logs a warning and returns `{ error }` on any I/O failure.
+	 */
+	static ensureDefaultModelsConfig(modelsJsonPath: string): {
+		written: boolean;
+		error?: string;
+	} {
+		if (!modelsJsonPath) return { written: false };
+		if (existsSync(modelsJsonPath)) return { written: false };
+		try {
+			const defaultPath = getDefaultModelsConfigPath();
+			if (!existsSync(defaultPath)) {
+				return {
+					written: false,
+					error: `Bundled default models.json missing at ${defaultPath}. Reinstall the package.`,
+				};
+			}
+			const content = readFileSync(defaultPath, "utf-8");
+			const dir = dirname(modelsJsonPath);
+			if (!existsSync(dir)) {
+				mkdirSync(dir, { recursive: true, mode: 0o700 });
+			}
+			writeFileSync(modelsJsonPath, content, { encoding: "utf-8", mode: 0o600 });
+			return { written: true };
+		} catch (err) {
+			return {
+				written: false,
+				error: err instanceof Error ? err.message : String(err),
+			};
+		}
 	}
 
 	/**

@@ -46,6 +46,7 @@ export interface Args {
 	listModels?: string | true;
 	offline?: boolean;
 	verbose?: boolean;
+	profile?: boolean;
 	projectTrustOverride?: boolean;
 	messages: string[];
 	fileArgs: string[];
@@ -177,6 +178,8 @@ export function parseArgs(args: string[]): Args {
 			}
 		} else if (arg === "--verbose") {
 			result.verbose = true;
+		} else if (arg === "--profile") {
+			result.profile = true;
 		} else if (arg === "--approve" || arg === "-a") {
 			result.projectTrustOverride = true;
 		} else if (arg === "--no-approve" || arg === "-na") {

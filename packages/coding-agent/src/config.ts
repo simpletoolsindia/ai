@@ -399,6 +399,24 @@ export function getPackageJsonPath(): string {
 	return join(getPackageDir(), "package.json");
 }
 
+/**
+ * Get path to the bundled default `models.json` that is written to a fresh
+ * `~/.ai/agent/models.json` on first run. The file ships with sensible
+ * defaults (Ollama auto-discover, commented-out LM Studio / vLLM, etc.).
+ *
+ * - For Bun binary: `core/assets/default-models.json` next to the executable
+ * - For Node.js (dist/): `dist/core/assets/default-models.json`
+ * - For tsx (src/): `src/core/assets/default-models.json`
+ */
+export function getDefaultModelsConfigPath(): string {
+	if (isBunBinary) {
+		return join(getPackageDir(), "core", "assets", "default-models.json");
+	}
+	const packageDir = getPackageDir();
+	const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
+	return join(packageDir, srcOrDist, "core", "assets", "default-models.json");
+}
+
 /** Get path to README.md */
 export function getReadmePath(): string {
 	return resolve(join(getPackageDir(), "README.md"));
@@ -472,6 +490,17 @@ export const ENV_AGENT_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_DIR`;
 export const ENV_SESSION_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_SESSION_DIR`;
 
 export function expandTildePath(path: string): string {
+	// Expand a leading "~" or "~/" to the current user's home directory.
+	// Also handles "~user" / "~user/" forms (rarely used but cheap to support).
+	if (!path) return normalizePath(path);
+	if (path === "~") return normalizePath(homedir());
+	if (path.startsWith("~/") || path.startsWith("~\\")) {
+		return normalizePath(join(homedir(), path.slice(2)));
+	}
+	if (path.startsWith("~")) {
+		// "~user" form — not supported without lookup, leave alone.
+		return normalizePath(path);
+	}
 	return normalizePath(path);
 }
 

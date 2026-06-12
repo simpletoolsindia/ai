@@ -23,10 +23,10 @@ import {
 } from "./core/agent-session-services.ts";
 import { formatNoModelsAvailableMessage } from "./core/auth-guidance.ts";
 import { AuthStorage } from "./core/auth-storage.ts";
+import { BUILT_IN_EXTENSION_FACTORIES } from "./core/built-in-extensions.ts";
 import { exportFromFile } from "./core/export-html/index.ts";
 import { emitProjectTrustEvent } from "./core/extensions/runner.ts";
 import type { ExtensionFactory, LoadExtensionsResult, ProjectTrustContext } from "./core/extensions/types.ts";
-import { BUILT_IN_EXTENSION_FACTORIES } from "./core/built-in-extensions.ts";
 import { configureHttpDispatcher } from "./core/http-dispatcher.ts";
 import { KeybindingsManager } from "./core/keybindings.ts";
 import type { ModelRegistry } from "./core/model-registry.ts";
@@ -760,6 +760,13 @@ export async function main(args: string[], options?: MainOptions) {
 
 	validateForkFlags(parsed);
 	validateSessionIdFlags(parsed);
+
+	// Enable startup-timing instrumentation for `--profile`. Equivalent
+	// to setting `PI_TIMING=1`. The flag only affects startup; per-turn
+	// timing is not currently exposed.
+	if (parsed.profile) {
+		process.env.PI_TIMING = "1";
+	}
 
 	// Run migrations (pass cwd for project-local migrations)
 	const { migratedAuthProviders: migratedProviders, deprecationWarnings } = runMigrations(process.cwd());

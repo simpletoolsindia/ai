@@ -43,21 +43,27 @@ const replaceEditSchema = Type.Object(
 
 const replaceLinesSchema = Type.Object({
 	startLine: Type.Number({ description: "1-indexed start line number to replace (inclusive)." }),
-	endLine: Type.Number({ description: "1-indexed end line number to replace (inclusive). Same as startLine to replace a single line." }),
+	endLine: Type.Number({
+		description: "1-indexed end line number to replace (inclusive). Same as startLine to replace a single line.",
+	}),
 	newText: Type.String({ description: "Replacement text (can be multiple lines)." }),
 });
 
 const editSchema = Type.Object(
 	{
 		path: Type.String({ description: "Path to the file to edit (relative or absolute)" }),
-		edits: Type.Optional(Type.Array(replaceEditSchema, {
-			description:
-				"Text-based replacements. Each edit matches oldText against the file. Use replaceLines instead for line-number based edits (more reliable).",
-		})),
-		replaceLines: Type.Optional(Type.Array(replaceLinesSchema, {
-			description:
-				"Line-number based replacements (preferred). Specify startLine and endLine (1-indexed) to replace those lines. More reliable than text matching. Read the file first to get accurate line numbers.",
-		})),
+		edits: Type.Optional(
+			Type.Array(replaceEditSchema, {
+				description:
+					"Text-based replacements. Each edit matches oldText against the file. Use replaceLines instead for line-number based edits (more reliable).",
+			}),
+		),
+		replaceLines: Type.Optional(
+			Type.Array(replaceLinesSchema, {
+				description:
+					"Line-number based replacements (preferred). Specify startLine and endLine (1-indexed) to replace those lines. More reliable than text matching. Read the file first to get accurate line numbers.",
+			}),
+		),
 	},
 	{ additionalProperties: false },
 );
@@ -133,7 +139,9 @@ function validateEditInput(input: EditToolInput): { path: string; edits: Edit[] 
 		input = convertReplaceLinesToEdits(input);
 	}
 	if (!Array.isArray(input.edits) || input.edits.length === 0) {
-		throw new Error("Edit tool requires either edits (text matching) or replaceLines (line numbers). Use replaceLines when you know the line numbers — it's more reliable. Read the file first with the read tool to get exact line numbers.");
+		throw new Error(
+			"Edit tool requires either edits (text matching) or replaceLines (line numbers). Use replaceLines when you know the line numbers — it's more reliable. Read the file first with the read tool to get exact line numbers.",
+		);
 	}
 	return { path: input.path, edits: input.edits };
 }
@@ -335,14 +343,16 @@ export function createEditToolDefinition(
 		name: "edit",
 		label: "edit",
 		description:
-			"Edit a single file using exact text replacement. Every edits[].oldText must match a unique, non-overlapping region of the original file. If two changes affect the same block or nearby lines, merge them into one edit instead of emitting overlapping edits. Do not include large unchanged regions just to connect distant changes.",
+			"Edit a single file precisely. ALWAYS read the file first with the read tool and use the line numbers it returns. Prefer `replaceLines` (1-indexed startLine/endLine from the read output) — it is far more reliable than `edits[].oldText`. Use `edits[].oldText` only when line numbers are not practical; in that case oldText must match EXACTLY and must be the smallest unique region that captures your change. If a change covers more than ~30% of the file, use `write` instead of trying to edit a huge region. For multiple independent changes in one file, batch them into a single edit call with multiple entries.",
 		promptSnippet:
-			"Make precise file edits with exact text replacement, including multiple disjoint edits in one call",
+			"Make precise file edits — prefer replaceLines, never write huge oldText blocks, batch multiple edits in one call",
 		promptGuidelines: [
-			"Use edit for precise changes (edits[].oldText must match exactly)",
-			"When changing multiple separate locations in one file, use one edit call with multiple entries in edits[] instead of multiple edit calls",
-			"Each edits[].oldText is matched against the original file, not after earlier edits are applied. Do not emit overlapping or nested edits. Merge nearby changes into one edit.",
-			"Keep edits[].oldText as small as possible while still being unique in the file. Do not pad with large unchanged regions.",
+			"Always read the file with `read` before editing. Use the line numbers from the read output.",
+			"Prefer `replaceLines` (startLine/endLine, 1-indexed). It is FAR more reliable than `edits[].oldText`.",
+			"Use `edits[].oldText` only when line numbers are not practical. oldText must match EXACTLY; copy-paste from the read output.",
+			"If a change covers > 30% of the file, use `write` instead of edit. A huge oldText is almost always wrong.",
+			"For multiple independent changes in the same file, batch them into one edit call with multiple `edits[]` or `replaceLines[]` entries — not multiple edit calls.",
+			"Keep each `oldText` as small as possible while still being unique. Do not pad with large unchanged regions.",
 		],
 		parameters: editSchema,
 		renderShell: "self",
@@ -395,6 +405,25 @@ export function createEditToolDefinition(
 				const { bom, text: content } = stripBom(rawContent);
 				const originalEnding = detectLineEnding(content);
 				const normalizedContent = normalizeToLF(content);
+
+				// Soft guard: if any single oldText covers more than 30% of
+				// the file, the LLM is almost certainly trying to rewrite
+				// the whole file via edit. Return a helpful error so it
+				// switches to `write` or narrows the change. Skipped when
+				// the LLM used `replaceLines` — that path is unambiguous
+				// because the model picked explicit line numbers.
+				if (input.replaceLines === undefined) {
+					const totalChars = normalizedContent.length;
+					const threshold = Math.max(200, Math.floor(totalChars * 0.3));
+					for (const e of edits) {
+						if (e.oldText.length > threshold) {
+							throw new Error(
+								`Refusing to edit ${path}: one edits[].oldText block is ${e.oldText.length} chars, which is more than 30% of the file (${totalChars} chars). This is almost always a mistake — either use the \`write\` tool to rewrite the whole file, or use \`replaceLines\` to target a specific line range. To force the edit anyway, switch to \`replaceLines\` with explicit startLine/endLine.`,
+							);
+						}
+					}
+				}
+
 				const { baseContent, newContent } = applyEditsToNormalizedContent(normalizedContent, edits, path);
 				throwIfAborted();
 

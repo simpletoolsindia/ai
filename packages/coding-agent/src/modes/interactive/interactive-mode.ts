@@ -1798,6 +1798,72 @@ export class InteractiveMode {
 	}
 
 	/**
+	 * Build a user-friendly progress message for an in-flight tool
+	 * call. Each built-in tool gets a short, action-oriented verb so
+	 * the spinner reads naturally ("Reading file …", "Writing file …",
+	 * "Running command …"). Falls back to the tool name for unknown
+	 * tools. Truncates the target path / command so the line never
+	 * overflows the spinner.
+	 */
+	private getToolWorkingMessage(toolName: string, args: unknown): string {
+		const truncate = (s: string, max = 60): string => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
+		const getArg = (key: string): string | undefined => {
+			if (args && typeof args === "object") {
+				const v = (args as Record<string, unknown>)[key];
+				if (typeof v === "string") return v;
+			}
+			return undefined;
+		};
+		switch (toolName) {
+			case "read": {
+				const p = getArg("path") ?? getArg("file_path");
+				return p ? `Reading ${truncate(p)}` : "Reading file";
+			}
+			case "write": {
+				const p = getArg("path") ?? getArg("file_path");
+				return p ? `Writing ${truncate(p)}` : "Writing file";
+			}
+			case "edit": {
+				const p = getArg("path") ?? getArg("file_path");
+				return p ? `Editing ${truncate(p)}` : "Editing file";
+			}
+			case "bash": {
+				const c = getArg("command");
+				return c ? `Running ${truncate(c)}` : "Running command";
+			}
+			case "grep": {
+				const p = getArg("pattern");
+				return p ? `Searching for ${truncate(p, 40)}` : "Searching files";
+			}
+			case "find": {
+				const p = getArg("pattern");
+				return p ? `Finding ${truncate(p, 40)}` : "Finding files";
+			}
+			case "ls": {
+				const p = getArg("path");
+				return p ? `Listing ${truncate(p)}` : "Listing directory";
+			}
+			case "websearch": {
+				const q = getArg("query");
+				return q ? `Searching the web for ${truncate(q, 40)}` : "Searching the web";
+			}
+			case "webfetch": {
+				const u = getArg("url");
+				return u ? `Fetching ${truncate(u, 50)}` : "Fetching URL";
+			}
+			case "todo": {
+				return "Updating todo list";
+			}
+			case "subagent": {
+				return "Running subagent";
+			}
+			default: {
+				return `Running ${toolName}`;
+			}
+		}
+	}
+
+	/**
 	 * Update the working spinner message to one of the dynamic phase
 	 * labels. The message sticks until the next call. Extensions can
 	 * still override via `setWorkingMessage()`.
@@ -3022,9 +3088,12 @@ export class InteractiveMode {
 					this.pendingTools.set(event.toolCallId, component);
 				}
 				component.markExecutionStarted();
-				// The tool is actually running now — show which tool
+				// The tool is actually running now — show a user-friendly
+				// per-tool message (e.g. "Reading src/foo.ts", "Running
+				// npm test") instead of a generic spinner.
+				const friendly = this.getToolWorkingMessage(event.toolName, event.args);
 				this.setDynamicWorkingMessage("executing");
-				this.workingMessage = `⚡ ${event.toolName} → executing`;
+				this.workingMessage = `⚡ ${friendly}`;
 				if (this.loadingAnimation) {
 					this.loadingAnimation.setMessage(
 						`${this.workingMessage} (${keyText("app.interrupt")} to interrupt)`,

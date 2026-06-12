@@ -1,0 +1,70 @@
+{
+	// Default ai models.json.
+	//
+	// Written to ~/.ai/agent/models.json the first time you run `ai`
+	// (when the file does not yet exist). Edit the file any time — the
+	// model picker reloads on each open. See docs/models.md for the
+	// full reference.
+	//
+	// Each entry below either auto-discovers a local server (Ollama /
+	// LM Studio / vLLM) or is a placeholder you fill in with an API
+	// key. Lines starting with // are comments and are stripped on load.
+	//
+	// Quick start:
+	//   1. Install Ollama (https://ollama.com) and pull a model:
+	//        ollama pull gemma4:e2b
+	//   2. Open `/model` in ai — your local models are listed.
+	//   3. For cloud providers, run `/login` and add a key.
+
+	"providers": {
+		// Local Ollama. The `autoDiscover: "ollama"` flag tells ai to
+		// query `GET /api/tags` on first use and populate the model
+		// list from whatever you have pulled. No apiKey is required
+		// (Ollama ignores it).
+		"ollama": {
+			"baseUrl": "http://localhost:11434/v1",
+			"api": "openai-completions",
+			"apiKey": "ollama",
+			"autoDiscover": "ollama",
+			"optionalApiKey": true,
+			"models": []
+		},
+
+		// LM Studio (https://lmstudio.ai). The `autoDiscover: "openai"`
+		// flag queries `GET /v1/models` and lists whatever is loaded.
+		// Uncomment the block below to enable it. The default port
+		// 1234 is what LM Studio serves on; change it if you moved it.
+		// "lmstudio": {
+		//   "baseUrl": "http://localhost:1234/v1",
+		//   "api": "openai-completions",
+		//   "apiKey": "lmstudio",
+		//   "autoDiscover": "openai",
+		//   "optionalApiKey": true,
+		//   "models": []
+		// },
+
+		// vLLM and other OpenAI-compatible servers. Uncomment and
+		// adjust the baseUrl to point at your server.
+		// "vllm": {
+		//   "baseUrl": "http://localhost:8000/v1",
+		//   "api": "openai-completions",
+		//   "apiKey": "vllm",
+		//   "autoDiscover": "openai",
+		//   "optionalApiKey": true,
+		//   "models": []
+		// },
+
+		// Cloud providers. Run `/login` to add the API key; the key
+		// is stored in auth.json (chmod 0o600), not in this file.
+		// After `/login`, the provider is added here automatically.
+		//
+		// To add manually, fill in the apiKey (or use the
+		// `optionalApiKey: true` flag for OAuth-only providers) and
+		// uncomment the entry. See docs/providers.md for the full
+		// list of built-in provider names.
+		//
+		// "anthropic": { "models": [] },
+		// "openai": { "models": [] },
+		// "google": { "models": [] }
+	}
+}

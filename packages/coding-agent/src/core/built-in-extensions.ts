@@ -10,12 +10,13 @@
  * `~/.ai/agent/settings.json` under `disabledBuiltInExtensions`.
  */
 
-import type { ExtensionFactory } from "./extensions/types.ts";
-
+import contextModeFactory from "./extensions/built-in/context-mode/index.ts";
+import docsResolverFactory from "./extensions/built-in/docs-resolver/index.ts";
 // Each built-in is a factory `(pi) => void` that follows the same shape
 // as a user-extension's default export.
 import hermesMemoryFactory from "./extensions/built-in/hermes-memory/index.ts";
-import contextModeFactory from "./extensions/built-in/context-mode/index.ts";
+import patternLearnerFactory from "./extensions/built-in/pattern-learner/index.ts";
+import type { ExtensionFactory } from "./extensions/types.ts";
 
 /**
  * Built-in extensions that are always loaded. Order matters for tool
@@ -32,6 +33,8 @@ import contextModeFactory from "./extensions/built-in/context-mode/index.ts";
 export const BUILT_IN_EXTENSION_FACTORIES: ExtensionFactory[] = [
 	hermesMemoryFactory,
 	contextModeFactory,
+	docsResolverFactory,
+	patternLearnerFactory,
 ];
 
 /**
@@ -41,4 +44,6 @@ export const BUILT_IN_EXTENSION_FACTORIES: ExtensionFactory[] = [
 export const BUILT_IN_EXTENSION_IDS: readonly string[] = [
 	"hermes-memory",
 	"context-mode",
+	"docs-resolver",
+	"pattern-learner",
 ] as const;

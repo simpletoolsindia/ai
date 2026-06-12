@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { ThinkingLevel } from "@simpletoolsindiaorg/ai-agent";
 import type { Model } from "@simpletoolsindiaorg/ai-provider";
@@ -141,7 +142,49 @@ export async function createAgentSessionServices(
 	const agentDir = options.agentDir ? resolvePath(options.agentDir) : getAgentDir();
 	const authStorage = options.authStorage ?? AuthStorage.create(join(agentDir, "auth.json"));
 	const settingsManager = options.settingsManager ?? SettingsManager.create(cwd, agentDir);
-	const modelRegistry = options.modelRegistry ?? ModelRegistry.create(authStorage, join(agentDir, "models.json"));
+	const modelsJsonPath = join(agentDir, "models.json");
+	const diagnostics: AgentSessionRuntimeDiagnostic[] = [];
+
+	// Surface where the user data lives on first startup. This is the
+	// "where is my auth.json / models.json / settings.json?" answer that
+	// the install script used to print, now shown by the app itself. Helps
+	// users debug bug 2 (auth not persisting) by confirming the resolved
+	// path matches what they expect.
+	{
+		const authPath = join(agentDir, "auth.json");
+		const settingsPath = join(agentDir, "settings.json");
+		const hasAuth = existsSync(authPath);
+		const hasSettings = existsSync(settingsPath);
+		const hasModels = existsSync(modelsJsonPath);
+		const configuredProviders = authStorage.list();
+		diagnostics.push({
+			type: "info",
+			message:
+				`Agent dir: ${agentDir} | auth: ${hasAuth ? "yes" : "no"} | ` +
+				`models: ${hasModels ? "yes" : "no"} | settings: ${hasSettings ? "yes" : "no"} | ` +
+				`providers configured: [${configuredProviders.join(", ")}]`,
+		});
+	}
+
+	// Bootstrap a default models.json on first run (or after a full
+	// ~/.ai reset). This is a no-op if the file already exists. The default
+	// ships with Ollama auto-discover enabled and commented-out examples for
+	// LM Studio / vLLM / cloud providers, so the model picker is never
+	// empty out-of-the-box.
+	const bootstrap = ModelRegistry.ensureDefaultModelsConfig(modelsJsonPath);
+	if (bootstrap.error) {
+		diagnostics.push({
+			type: "warning",
+			message: `Could not bootstrap default models.json at ${modelsJsonPath}: ${bootstrap.error}`,
+		});
+	} else if (bootstrap.written) {
+		diagnostics.push({
+			type: "info",
+			message: `Wrote default models.json to ${modelsJsonPath} (Ollama auto-discover enabled).`,
+		});
+	}
+
+	const modelRegistry = options.modelRegistry ?? ModelRegistry.create(authStorage, modelsJsonPath);
 	const resourceLoader = new DefaultResourceLoader({
 		...(options.resourceLoaderOptions ?? {}),
 		cwd,
@@ -149,8 +192,6 @@ export async function createAgentSessionServices(
 		settingsManager,
 	});
 	await resourceLoader.reload(options.resourceLoaderReloadOptions);
-
-	const diagnostics: AgentSessionRuntimeDiagnostic[] = [];
 	const extensionsResult = resourceLoader.getExtensions();
 	for (const { name, config, extensionPath } of extensionsResult.runtime.pendingProviderRegistrations) {
 		try {

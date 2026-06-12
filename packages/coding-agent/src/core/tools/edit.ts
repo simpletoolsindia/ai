@@ -37,6 +37,16 @@ const replaceEditSchema = Type.Object(
 				"Exact text for one targeted replacement. It must be unique in the original file and must not overlap with any other edits[].oldText in the same call.",
 		}),
 		newText: Type.String({ description: "Replacement text for this targeted edit." }),
+		/**
+		 * Optional: replace every occurrence of oldText in the file. Default false.
+		 * Useful for batch rename / refactor. When true, oldText does NOT need to be
+		 * unique; all matches are replaced.
+		 */
+		replaceAll: Type.Optional(
+			Type.Boolean({
+				description: "Replace all occurrences of oldText in the file (default false).",
+			}),
+		),
 	},
 	{ additionalProperties: false },
 );
@@ -342,8 +352,20 @@ export function createEditToolDefinition(
 	return {
 		name: "edit",
 		label: "edit",
-		description:
-			"Edit a single file precisely. ALWAYS read the file first with the read tool and use the line numbers it returns. Prefer `replaceLines` (1-indexed startLine/endLine from the read output) — it is far more reliable than `edits[].oldText`. Use `edits[].oldText` only when line numbers are not practical; in that case oldText must match EXACTLY and must be the smallest unique region that captures your change. If a change covers more than ~30% of the file, use `write` instead of trying to edit a huge region. For multiple independent changes in one file, batch them into a single edit call with multiple entries.",
+		description: `Performs exact string replacements in files. For surgical, reliable edits.
+
+Usage:
+- ALWAYS read the file first with the \`read\` tool. Use the line numbers it returns.
+- When matching text from the read tool output, preserve the exact indentation (tabs/spaces) as it appears. Do NOT include the line number prefix in oldText.
+- Prefer \`replaceLines\` (1-indexed startLine/endLine) — it is FAR more reliable than \`edits[].oldText\` because line numbers don't shift between calls.
+- If a change covers more than ~30% of the file, use \`write\` instead of edit.
+- For multiple independent changes in the same file, batch them into one edit call with multiple \`edits[]\` or \`replaceLines[]\` entries.
+
+Matching rules:
+- \`oldText\` must match EXACTLY (character for character) including whitespace and newlines. If it's not unique, the edit fails — provide more surrounding context to make it unique, or use \`replaceAll: true\`.
+- \`replaceAll: true\` replaces every occurrence of \`oldText\`. Useful for renaming variables across a file. When true, \`oldText\` does NOT need to be unique.
+- The tool auto-normalizes smart quotes (\u201c\u201d \u2018\u2019) and trailing whitespace, so minor formatting drift is usually fine.
+- The edit will FAIL with a 'not found' error if oldText is not present. Re-read the file if necessary.`,
 		promptSnippet:
 			"Make precise file edits — prefer replaceLines, never write huge oldText blocks, batch multiple edits in one call",
 		promptGuidelines: [
@@ -406,13 +428,21 @@ export function createEditToolDefinition(
 				const originalEnding = detectLineEnding(content);
 				const normalizedContent = normalizeToLF(content);
 
+				// If the user passed `replaceAll: true` on every edit, treat
+				// this as a global rename. We can also enable the new
+				// single-pass apply path that is far more reliable than the
+				// per-edit unique-match guard.
+				const allReplaceAll = edits.length > 0 && edits.every((e) => e.replaceAll === true);
+
 				// Soft guard: if any single oldText covers more than 30% of
 				// the file, the LLM is almost certainly trying to rewrite
 				// the whole file via edit. Return a helpful error so it
 				// switches to `write` or narrows the change. Skipped when
 				// the LLM used `replaceLines` — that path is unambiguous
-				// because the model picked explicit line numbers.
-				if (input.replaceLines === undefined) {
+				// because the model picked explicit line numbers. Also
+				// skipped when replaceAll is true (the LLM is intentionally
+				// doing a global replace, so a large oldText is fine).
+				if (input.replaceLines === undefined && !allReplaceAll) {
 					const totalChars = normalizedContent.length;
 					const threshold = Math.max(200, Math.floor(totalChars * 0.3));
 					for (const e of edits) {
@@ -424,7 +454,12 @@ export function createEditToolDefinition(
 					}
 				}
 
-				const { baseContent, newContent } = applyEditsToNormalizedContent(normalizedContent, edits, path);
+				const { baseContent, newContent } = applyEditsToNormalizedContent(
+					normalizedContent,
+					edits,
+					path,
+					{ allReplaceAll },
+				);
 				throwIfAborted();
 
 				const finalContent = bom + restoreLineEndings(newContent, originalEnding);
@@ -437,7 +472,9 @@ export function createEditToolDefinition(
 					content: [
 						{
 							type: "text",
-							text: `Successfully replaced ${edits.length} block(s) in ${path}.`,
+							text: allReplaceAll
+								? `Successfully replaced all occurrences across ${edits.length} block(s) in ${path}.`
+								: `Successfully replaced ${edits.length} block(s) in ${path}.`,
 						},
 					],
 					details: { diff: diffResult.diff, patch, firstChangedLine: diffResult.firstChangedLine },

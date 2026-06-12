@@ -164,7 +164,9 @@ Rules:
 
 ✓  EXECUTE MODE  ✓
 
-Full tool set. Work through the active todo list in order. Mark \`in_progress\` when you start, \`completed\` when done. Update the list as you go.`
+Full tool set. Work through the active todo list in order. Mark \`in_progress\` when you start, \`completed\` when done. Update the list as you go.
+
+MANDATORY: For any task that needs 2+ tool calls, call the \`todo\` tool FIRST to lay out the steps. The user can see your todo list and needs it to follow what you're doing. After every completed step, update the list before moving on. If you ever stop mid-task, the user picks up exactly where you stopped.`
 				: ""
 	}
 

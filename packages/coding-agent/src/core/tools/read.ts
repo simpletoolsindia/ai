@@ -15,7 +15,7 @@ import type { ToolDefinition, ToolRenderResultOptions } from "../extensions/type
 import { resolveReadPathAsync, resolveToCwd } from "./path-utils.ts";
 import { getTextOutput, renderToolPath, replaceTabs, str } from "./render-utils.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
-import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, type TruncationResult, truncateHead } from "./truncate.ts";
+import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, READ_MAX_LINE_LENGTH, type TruncationResult, truncateHead } from "./truncate.ts";
 
 const readSchema = Type.Object({
 	path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
@@ -137,6 +137,25 @@ function getCompactReadClassification(
 	return undefined;
 }
 
+/**
+ * Truncate individual lines that exceed READ_MAX_LINE_LENGTH (default 2000
+ * chars). Matches openclaude / Claude Code: prevents minified files or
+ * single-line JSON from poisoning the model context. The truncation marker
+ * tells the model to call read again with offset/limit if it needs the rest.
+ */
+function truncateLongLines(text: string): string {
+	if (!text) return text;
+	const lines = text.split("\n");
+	let changed = false;
+	for (let i = 0; i < lines.length; i++) {
+		if (lines[i]!.length > READ_MAX_LINE_LENGTH) {
+			lines[i] = `${lines[i]!.slice(0, READ_MAX_LINE_LENGTH)}\u2026 [+${lines[i]!.length - READ_MAX_LINE_LENGTH} chars]`;
+			changed = true;
+		}
+	}
+	return changed ? lines.join("\n") : text;
+}
+
 function formatCompactReadCall(
 	classification: CompactReadClassification,
 	args: ReadRenderArgs | undefined,
@@ -175,7 +194,7 @@ function formatReadResult(
 	}
 
 	const rawPath = str(args?.file_path ?? args?.path);
-	const output = getTextOutput(result, showImages);
+	const output = truncateLongLines(getTextOutput(result, showImages));
 	const lang = rawPath ? getLanguageFromPath(rawPath) : undefined;
 	const renderedLines = lang ? highlightCode(replaceTabs(output), lang) : output.split("\n");
 	const lines = trimTrailingEmptyLines(renderedLines);
@@ -209,9 +228,18 @@ export function createReadToolDefinition(
 	return {
 		name: "read",
 		label: "read",
-		description: `Read the contents of a file. Supports text files and images (jpg, png, gif, webp). Images are sent as attachments. For text files, output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.`,
+		description: `Reads a file from the local filesystem. You can access any file directly by using this tool.
+
+Usage:
+- The path parameter must be an absolute path, not a relative path
+- By default, reads up to ${DEFAULT_MAX_LINES} lines starting from the beginning of the file. Each line is truncated to ${READ_MAX_LINE_LENGTH} characters.
+- You can optionally specify an offset and limit (especially handy for long files), but it's recommended to read the whole file by not providing these parameters
+- Results are returned with line numbers (cat -n format, line numbers start at 1) so you can target the same region with edit's replaceLines.
+- For text files, output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). When you need the full file, continue with offset/limit until complete.
+- This tool supports images (PNG, JPG, GIF, WebP) — contents are presented visually.
+- This tool can only read files, not directories. To read a directory, use the ls tool or bash.`,
 		promptSnippet: "Read file contents",
-		promptGuidelines: ["Use read to examine files instead of cat or sed."],
+		promptGuidelines: ["Use read to examine files instead of cat, head, tail, or sed."],
 		parameters: readSchema,
 		async execute(
 			_toolCallId,

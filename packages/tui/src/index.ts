@@ -9,13 +9,21 @@ export {
 	type SlashCommand,
 } from "./autocomplete.ts";
 // Components
+export { ActivityIndicator, type ActivityIndicatorTheme } from "./components/activity-indicator.ts";
 export { Box } from "./components/box.ts";
+export { Breadcrumb, type BreadcrumbItem, type BreadcrumbTheme } from "./components/breadcrumb.ts";
 export { CancellableLoader } from "./components/cancellable-loader.ts";
+export {
+	type CommandPaletteItem,
+	CommandPalette,
+	type CommandPaletteTheme,
+} from "./components/command-palette.ts";
 export { Editor, type EditorOptions, type EditorTheme } from "./components/editor.ts";
 export { Image, type ImageOptions, type ImageTheme } from "./components/image.ts";
 export { Input } from "./components/input.ts";
 export { Loader, type LoaderIndicatorOptions } from "./components/loader.ts";
 export { type DefaultTextStyle, Markdown, type MarkdownOptions, type MarkdownTheme } from "./components/markdown.ts";
+export { type ProgressBarStyle, ProgressBar } from "./components/progress-bar.ts";
 export {
 	type SelectItem,
 	SelectList,
@@ -26,6 +34,7 @@ export {
 export { type SettingItem, SettingsList, type SettingsListTheme } from "./components/settings-list.ts";
 export { Spacer } from "./components/spacer.ts";
 export { Text } from "./components/text.ts";
+export { Toast, type ToastLevel, ToastManager } from "./components/toast.ts";
 export { TruncatedText } from "./components/truncated-text.ts";
 // Editor component interface (for custom editors)
 export type { EditorComponent } from "./editor-component.ts";

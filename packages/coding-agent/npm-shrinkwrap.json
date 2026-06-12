@@ -1,17 +1,17 @@
 {
 	"name": "@simpletoolsindiaorg/ai-coding-agent",
-	"version": "0.85.3",
+	"version": "0.85.4",
 	"lockfileVersion": 3,
 	"requires": true,
 	"packages": {
 		"": {
 			"name": "@simpletoolsindiaorg/ai-coding-agent",
-			"version": "0.85.3",
+			"version": "0.85.4",
 			"license": "MIT",
 			"dependencies": {
-				"@simpletoolsindiaorg/ai-agent": "^0.84.3",
-				"@simpletoolsindiaorg/ai-provider": "^0.84.3",
-				"@simpletoolsindiaorg/ai-tui": "^0.84.3",
+				"@simpletoolsindiaorg/ai-agent": "^0.85.4",
+				"@simpletoolsindiaorg/ai-provider": "^0.85.4",
+				"@simpletoolsindiaorg/ai-tui": "^0.85.4",
 				"@silvia-odwyer/photon-node": "0.3.4",
 				"@mixmark-io/domino": "2.2.0",
 				"better-sqlite3": "12.9.0",
@@ -836,11 +836,11 @@
 			"license": "Apache-2.0"
 		},
 		"node_modules/@simpletoolsindiaorg/ai-agent": {
-			"version": "0.85.3",
-			"resolved": "https://registry.npmjs.org/@simpletoolsindiaorg/ai-agent/-/ai-agent-0.85.3.tgz",
+			"version": "0.85.4",
+			"resolved": "https://registry.npmjs.org/@simpletoolsindiaorg/ai-agent/-/ai-agent-0.85.4.tgz",
 			"license": "MIT",
 			"dependencies": {
-				"@simpletoolsindiaorg/ai-provider": "^0.84.3",
+				"@simpletoolsindiaorg/ai-provider": "^0.85.4",
 				"ignore": "7.0.5",
 				"typebox": "1.1.38",
 				"yaml": "2.9.0"
@@ -850,8 +850,8 @@
 			}
 		},
 		"node_modules/@simpletoolsindiaorg/ai-provider": {
-			"version": "0.85.3",
-			"resolved": "https://registry.npmjs.org/@simpletoolsindiaorg/ai-provider/-/ai-provider-0.85.3.tgz",
+			"version": "0.85.4",
+			"resolved": "https://registry.npmjs.org/@simpletoolsindiaorg/ai-provider/-/ai-provider-0.85.4.tgz",
 			"license": "MIT",
 			"dependencies": {
 				"@anthropic-ai/sdk": "0.91.1",
@@ -873,8 +873,8 @@
 			}
 		},
 		"node_modules/@simpletoolsindiaorg/ai-tui": {
-			"version": "0.85.3",
-			"resolved": "https://registry.npmjs.org/@simpletoolsindiaorg/ai-tui/-/ai-tui-0.85.3.tgz",
+			"version": "0.85.4",
+			"resolved": "https://registry.npmjs.org/@simpletoolsindiaorg/ai-tui/-/ai-tui-0.85.4.tgz",
 			"license": "MIT",
 			"dependencies": {
 				"get-east-asian-width": "1.6.0",

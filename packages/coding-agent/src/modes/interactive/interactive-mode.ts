@@ -43,6 +43,8 @@ import {
 	Spacer,
 	setKeybindings,
 	Text,
+	Toast,
+	ToastManager,
 	TruncatedText,
 	TUI,
 	visibleWidth,
@@ -327,6 +329,7 @@ export class InteractiveMode {
 	// Status line tracking (for mutating immediately-sequential status updates)
 	private lastStatusSpacer: Spacer | undefined = undefined;
 	private lastStatusText: Text | undefined = undefined;
+	private toastManager: ToastManager | undefined = undefined;
 
 	// Streaming message tracking
 	private streamingComponent: AssistantMessageComponent | undefined = undefined;
@@ -3342,6 +3345,25 @@ export class InteractiveMode {
 		this.ui.requestRender();
 	}
 
+	/**
+	 * Optional toast notification (premium UI enhancement). Only renders
+	 * a banner when `uiEnhancements.enabled` is true in settings; otherwise
+	 * it is a no-op so the default experience is unchanged.
+	 */
+	private showToast(
+		message: string,
+		level: "info" | "success" | "warning" | "error" = "info",
+		durationMs: number = 3000,
+	): void {
+		if (!this.settingsManager.getUiEnhancementsEnabled()) return;
+		if (!this.toastManager) {
+			this.toastManager = new ToastManager(() => this.ui.requestRender());
+			this.toastManager.start();
+		}
+		this.toastManager.add(new Toast(message, level, durationMs));
+		this.ui.requestRender();
+	}
+
 	private addMessageToChat(message: AgentMessage, options?: { populateHistory?: boolean }): void {
 		switch (message.role) {
 			case "bashExecution": {
@@ -4720,6 +4742,7 @@ export class InteractiveMode {
 								: enabledIds;
 						this.settingsManager.setEnabledModels(newPatterns ? [...newPatterns] : undefined);
 						this.showStatus("Model selection saved to settings");
+						this.showToast("Model selection saved", "success", 2000);
 					},
 					onCancel: () => {
 						done();
@@ -6697,10 +6720,11 @@ export class InteractiveMode {
 		if (current === "plan" && next === "execute") {
 			const todoState = getTodoStore().getState();
 			if (todoState.items.length > 0) {
+				const list = formatTodoListForLlm(todoState.items);
 				// Submit a prompt to start executing the plan
 				this.session
 					.prompt(
-						"Execute the plan from the todo list. Work through each item in order, marking each in_progress when you start and completed when done.",
+						`Mode switched to EXECUTE. Implement the plan below. Mark each item in_progress when you start, completed when done, and update the todo list after every step. Don't stop until all items are completed.\n\nPlan:\n${list}`,
 					)
 					.catch(() => {});
 			}

@@ -58,15 +58,21 @@ function resolvePromptInput(input: string | undefined, description: string): str
 	return input;
 }
 
-function loadContextFileFromDir(dir: string): { path: string; content: string } | null {
+function loadContextFileFromDir(dir: string, maxBytes: number = 50 * 1024): { path: string; content: string } | null {
 	const candidates = ["AGENTS.md", "AGENTS.MD", "CLAUDE.md", "CLAUDE.MD"];
 	for (const filename of candidates) {
 		const filePath = join(dir, filename);
 		if (existsSync(filePath)) {
 			try {
+				let content = readFileSync(filePath, "utf-8");
+				const bytes = Buffer.byteLength(content, "utf-8");
+				if (bytes > maxBytes) {
+					const truncated = content.slice(0, maxBytes);
+					content = `${truncated}\n\n[...truncated: file is ${bytes} bytes, system prompt cap is ${maxBytes} bytes. Edit AGENTS.md to keep it small, or raise the cap in settings.]`;
+				}
 				return {
 					path: filePath,
-					content: readFileSync(filePath, "utf-8"),
+					content,
 				};
 			} catch (error) {
 				console.error(chalk.yellow(`Warning: Could not read ${filePath}: ${error}`));
@@ -80,14 +86,16 @@ export function loadProjectContextFiles(options: {
 	cwd: string;
 	agentDir: string;
 	projectTrusted?: boolean;
+	maxContextFileSizeBytes?: number;
 }): Array<{ path: string; content: string }> {
 	const resolvedCwd = resolvePath(options.cwd);
 	const resolvedAgentDir = resolvePath(options.agentDir);
+	const maxBytes = options.maxContextFileSizeBytes ?? 50 * 1024;
 
 	const contextFiles: Array<{ path: string; content: string }> = [];
 	const seenPaths = new Set<string>();
 
-	const globalContext = loadContextFileFromDir(resolvedAgentDir);
+	const globalContext = loadContextFileFromDir(resolvedAgentDir, maxBytes);
 	if (globalContext) {
 		contextFiles.push(globalContext);
 		seenPaths.add(globalContext.path);
@@ -100,7 +108,7 @@ export function loadProjectContextFiles(options: {
 		const root = resolve("/");
 
 		while (true) {
-			const contextFile = loadContextFileFromDir(currentDir);
+			const contextFile = loadContextFileFromDir(currentDir, maxBytes);
 			if (contextFile && !seenPaths.has(contextFile.path)) {
 				ancestorContextFiles.unshift(contextFile);
 				seenPaths.add(contextFile.path);
@@ -455,6 +463,7 @@ export class DefaultResourceLoader implements ResourceLoader {
 						cwd: this.cwd,
 						agentDir: this.agentDir,
 						projectTrusted: this.settingsManager.isProjectTrusted(),
+						maxContextFileSizeBytes: this.settingsManager.getMaxContextFileSizeBytes(),
 					}),
 		};
 		const resolvedAgentsFiles = this.agentsFilesOverride ? this.agentsFilesOverride(agentsFiles) : agentsFiles;

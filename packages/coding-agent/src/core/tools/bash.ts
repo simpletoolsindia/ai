@@ -276,7 +276,22 @@ export function createBashToolDefinition(
 	return {
 		name: "bash",
 		label: "bash",
-		description: `Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.`,
+		description: `Executes a given bash command and returns its output.
+
+The working directory persists between commands, but shell state does not. The shell environment is initialized from the user's profile.
+
+IMPORTANT: Avoid using this tool to run \`find\`, \`grep\`, \`cat\`, \`head\`, \`tail\`, \`sed\`, \`awk\`, or \`echo\` commands, unless explicitly instructed or after you have verified that a dedicated tool cannot accomplish your task. Instead, use the appropriate dedicated tool:
+- File search: use the \`find\` tool
+- Content search: use the \`grep\` tool
+- Read files: use the \`read\` tool (NOT cat/head/tail)
+- Edit files: use the \`edit\` tool (NOT sed/awk)
+- Write files: use the \`write\` tool (NOT echo >/cat <<EOF)
+
+Usage:
+- Output is truncated to last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). If truncated, the full output is saved to a temp file and the path is shown in the result.
+- Optionally provide a \`timeout\` in seconds (default 120, max 600).
+- For long-running commands, run them in the background and check the output file later.
+- When issuing multiple commands, prefer parallel tool calls in a single message for independent commands. For sequential dependent commands, chain with '&&'.`,
 		promptSnippet: "Execute bash commands (ls, grep, find, etc.)",
 		parameters: bashSchema,
 		async execute(

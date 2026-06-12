@@ -158,6 +158,15 @@ export interface Settings {
 	toolResultClearing?: ToolResultClearingSettings; // Context-saver: clear stale read/bash/etc. results (on by default)
 	shareViewerUrl?: string; // override the base URL for /share (default: https://api.simpletoolsindiaorg.invalid/session/)
 	packages?: PackageSource[]; // Array of npm/git package sources (string or object with filtering)
+	/**
+	 * Enable the optional premium UI enhancements (toasts, command palette,
+	 * breadcrumb, activity indicator, progress bar). Off by default so the
+	 * default look is unchanged. Set `uiEnhancements.enabled = true` in
+	 * settings.json to opt in.
+	 */
+	uiEnhancements?: { enabled?: boolean };
+	/** Max bytes per AGENTS.md context file (default 50KB). Files larger than this are truncated in the system prompt. */
+	maxContextFileSizeBytes?: number;
 	extensions?: string[]; // Array of local extension file paths or directories
 	skills?: string[]; // Array of local skill file paths or directories
 	prompts?: string[]; // Array of local prompt template paths or directories
@@ -944,6 +953,14 @@ export class SettingsManager {
 
 	getQuietStartup(): boolean {
 		return this.settings.quietStartup ?? false;
+	}
+
+	getUiEnhancementsEnabled(): boolean {
+		return this.settings.uiEnhancements?.enabled === true;
+	}
+
+	getMaxContextFileSizeBytes(): number {
+		return this.settings.maxContextFileSizeBytes ?? 50 * 1024;
 	}
 
 	setQuietStartup(quiet: boolean): void {

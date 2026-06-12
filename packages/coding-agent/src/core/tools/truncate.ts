@@ -1,16 +1,32 @@
 /**
  * Shared truncation utilities for tool outputs.
  *
- * Truncation is based on two independent limits - whichever is hit first wins:
- * - Line limit (default: 2000 lines)
- * - Byte limit (default: 50KB)
+ * Defaults match openclaude / Claude Code so tool outputs feel familiar to
+ * the model: 2000 lines / 30KB. BASH_MAX_OUTPUT_LENGTH env var can further
+ * tune the bash-output cap (capped at 150KB).
  *
  * Never returns partial lines (except bash tail truncation edge case).
  */
 
 export const DEFAULT_MAX_LINES = 2000;
-export const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
+export const DEFAULT_MAX_BYTES = 30 * 1024; // 30KB
+export const BASH_MAX_OUTPUT_DEFAULT = 30 * 1024; // 30KB
+export const BASH_MAX_OUTPUT_UPPER_LIMIT = 150 * 1024; // 150KB
 export const GREP_MAX_LINE_LENGTH = 500; // Max chars per grep match line
+export const READ_MAX_LINE_LENGTH = 2000; // Max chars per line from read tool
+
+/**
+ * Resolve the bash tool's max output length, honoring the
+ * BASH_MAX_OUTPUT_LENGTH env var (clamped to BASH_MAX_OUTPUT_UPPER_LIMIT).
+ * Lets users tune per-session without re-compiling.
+ */
+export function getBashMaxOutputLength(): number {
+	const raw = process.env.BASH_MAX_OUTPUT_LENGTH;
+	if (!raw) return BASH_MAX_OUTPUT_DEFAULT;
+	const parsed = Number.parseInt(raw, 10);
+	if (!Number.isFinite(parsed) || parsed <= 0) return BASH_MAX_OUTPUT_DEFAULT;
+	return Math.min(parsed, BASH_MAX_OUTPUT_UPPER_LIMIT);
+}
 
 export interface TruncationResult {
 	/** The truncated content */

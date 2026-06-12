@@ -76,6 +76,8 @@ export interface FuzzyMatchResult {
 export interface Edit {
 	oldText: string;
 	newText: string;
+	/** When true, replace every occurrence of oldText (Claude Code / openclaude `replace_all`). */
+	replaceAll?: boolean;
 }
 
 interface MatchedEdit {
@@ -225,19 +227,56 @@ function countOccurrences(content: string, oldText: string): number {
 	return fuzzyContent.split(fuzzyOldText).length - 1;
 }
 
-function getNotFoundError(path: string, editIndex: number, totalEdits: number): Error {
+function getNotFoundError(
+	path: string,
+	editIndex: number,
+	totalEdits: number,
+	oldText?: string,
+	content?: string,
+): Error {
 	const hint = `
 
-Tip: Use the \`read\` tool to see the exact file content before editing. The \`oldText\` must match EXACTLY — character for character including indentation, blank lines, and trailing spaces.
+Tip: Use the \`read\` tool to see the exact file content before editing. The \`oldText\` must match EXACTLY — character for character including indentation, blank lines, and trailing spaces. Smart quotes (\u201c\u201d) and straight quotes (\"\") are different; the edit tool normalizes them automatically when fuzzy matching.${oldText && content ? buildDidYouMeanHint(oldText, content) : ""}
   → read ${path}`;
+
+	const whichEdit = totalEdits === 1 ? "" : `edits[${editIndex}] `;
 	if (totalEdits === 1) {
 		return new Error(
-			`Could not find the exact text in ${path}. The old text must match exactly including all whitespace and newlines.${hint}`,
+			`Could not find the text in ${path}.${hint}`,
 		);
 	}
 	return new Error(
-		`Could not find edits[${editIndex}] in ${path}. The oldText must match exactly including all whitespace and newlines.${hint}`,
+		`Could not find ${whichEdit}in ${path}.${hint}`,
 	);
+}
+
+/**
+ * Find the closest line in the file to a non-matching oldText and suggest it
+ * as a "did you mean?" hint. Uses a tiny longest-common-substring heuristic
+ * that is fast enough to run on every not-found error and dramatically helps
+ * the LLM self-correct on the next turn.
+ */
+function buildDidYouMeanHint(oldText: string, content: string): string {
+	const target = oldText.slice(0, 60).toLowerCase();
+	if (target.length < 8) return "";
+	const lines = content.split("\n");
+	let bestLine = "";
+	let bestScore = 0;
+	for (const line of lines) {
+		const lower = line.toLowerCase();
+		// score = number of characters from target found in order in the line
+		let ti = 0;
+		for (let li = 0; li < lower.length && ti < target.length; li++) {
+			if (lower[li] === target[ti]) ti++;
+		}
+		if (ti > bestScore) {
+			bestScore = ti;
+			bestLine = line;
+		}
+	}
+	if (bestScore < 5 || !bestLine.trim()) return "";
+	const truncated = bestLine.length > 80 ? bestLine.slice(0, 77) + "..." : bestLine;
+	return `\n  → Did you mean a line like: "${truncated}"?`;
 }
 
 function getDuplicateError(path: string, editIndex: number, totalEdits: number, occurrences: number): Error {
@@ -279,10 +318,13 @@ export function applyEditsToNormalizedContent(
 	normalizedContent: string,
 	edits: Edit[],
 	path: string,
+	options: { allReplaceAll?: boolean } = {},
 ): AppliedEditsResult {
+	const { allReplaceAll = false } = options;
 	const normalizedEdits = edits.map((edit) => ({
 		oldText: normalizeToLF(edit.oldText),
 		newText: normalizeToLF(edit.newText),
+		replaceAll: edit.replaceAll === true,
 	}));
 
 	for (let i = 0; i < normalizedEdits.length; i++) {
@@ -296,17 +338,39 @@ export function applyEditsToNormalizedContent(
 		? normalizeForFuzzyMatch(normalizedContent)
 		: normalizedContent;
 
+	// Fast path: when ALL edits are replaceAll, skip uniqueness check and
+	// just do sequential global replacements.
+	if (allReplaceAll) {
+		let newContent = baseContent;
+		let totalReplacements = 0;
+		for (const edit of normalizedEdits) {
+			const occurrences = countOccurrences(newContent, edit.oldText);
+			if (occurrences === 0) {
+				throw getNotFoundError(path, normalizedEdits.indexOf(edit), normalizedEdits.length, edit.oldText, baseContent);
+			}
+			newContent = newContent.split(edit.oldText).join(edit.newText);
+			totalReplacements += occurrences;
+		}
+		if (baseContent === newContent) {
+			throw getNoChangeError(path, normalizedEdits.length);
+		}
+		return { baseContent, newContent };
+	}
+
 	const matchedEdits: MatchedEdit[] = [];
 	for (let i = 0; i < normalizedEdits.length; i++) {
 		const edit = normalizedEdits[i];
 		const matchResult = fuzzyFindText(baseContent, edit.oldText);
 		if (!matchResult.found) {
-			throw getNotFoundError(path, i, normalizedEdits.length);
+			throw getNotFoundError(path, i, normalizedEdits.length, edit.oldText, baseContent);
 		}
 
-		const occurrences = countOccurrences(baseContent, edit.oldText);
-		if (occurrences > 1) {
-			throw getDuplicateError(path, i, normalizedEdits.length, occurrences);
+		// Skip uniqueness check when this individual edit has replaceAll=true
+		if (!edit.replaceAll) {
+			const occurrences = countOccurrences(baseContent, edit.oldText);
+			if (occurrences > 1) {
+				throw getDuplicateError(path, i, normalizedEdits.length, occurrences);
+			}
 		}
 
 		matchedEdits.push({
@@ -318,14 +382,17 @@ export function applyEditsToNormalizedContent(
 	}
 
 	matchedEdits.sort((a, b) => a.matchIndex - b.matchIndex);
+	const overlapErrors: Array<{ previousIndex: number; currentIndex: number }> = [];
 	for (let i = 1; i < matchedEdits.length; i++) {
 		const previous = matchedEdits[i - 1];
 		const current = matchedEdits[i];
 		if (previous.matchIndex + previous.matchLength > current.matchIndex) {
-			throw new Error(
-				`edits[${previous.editIndex}] and edits[${current.editIndex}] overlap in ${path}. Merge them into one edit or target disjoint regions.`,
-			);
+			overlapErrors.push({ previousIndex: previous.editIndex, currentIndex: current.editIndex });
 		}
+	}
+	if (overlapErrors.length > 0) {
+		const merged = mergeOverlappingEdits(baseContent, normalizedEdits, path, overlapErrors);
+		return merged;
 	}
 
 	let newContent = baseContent;
@@ -342,6 +409,80 @@ export function applyEditsToNormalizedContent(
 	}
 
 	return { baseContent, newContent };
+}
+
+/**
+ * When the model passes overlapping edits (e.g. two edits[].oldText blocks
+ * that share lines), merge them into a single edit that covers the union
+ * region. This is far more reliable than throwing an error and asking
+ * the model to retry — overlapping edits are usually a sign the model
+ * just isn't tracking the file state closely, not a hard error.
+ */
+function mergeOverlappingEdits(
+	baseContent: string,
+	normalizedEdits: Array<{ oldText: string; newText: string; replaceAll: boolean }>,
+	path: string,
+	overlapErrors: Array<{ previousIndex: number; currentIndex: number }>,
+): AppliedEditsResult {
+	// Build union groups of overlapping indices
+	const parent = new Map<number, number>();
+	for (let i = 0; i < normalizedEdits.length; i++) parent.set(i, i);
+	const find = (x: number): number => {
+		let root = x;
+		while (parent.get(root) !== root) root = parent.get(root)!;
+		while (parent.get(x) !== root) {
+			const next = parent.get(x)!;
+			parent.set(x, root);
+			x = next;
+		}
+		return root;
+	};
+	const union = (a: number, b: number) => {
+		const ra = find(a);
+		const rb = find(b);
+		if (ra !== rb) parent.set(ra, rb);
+	};
+	for (const { previousIndex, currentIndex } of overlapErrors) {
+		union(previousIndex, currentIndex);
+	}
+
+	const groups = new Map<number, number[]>();
+	for (let i = 0; i < normalizedEdits.length; i++) {
+		const root = find(i);
+		if (!groups.has(root)) groups.set(root, []);
+		groups.get(root)!.push(i);
+	}
+
+	const merged: Array<{ oldText: string; newText: string; replaceAll: boolean }> = [];
+	for (const indices of groups.values()) {
+		if (indices.length === 1) {
+			merged.push(normalizedEdits[indices[0]!]!);
+			continue;
+		}
+		// Find the union of the match ranges
+		let start = Number.POSITIVE_INFINITY;
+		let end = 0;
+		for (const idx of indices) {
+			const m = fuzzyFindText(baseContent, normalizedEdits[idx]!.oldText);
+			if (!m.found) {
+				throw getNotFoundError(path, idx, normalizedEdits.length, normalizedEdits[idx]!.oldText, baseContent);
+			}
+			start = Math.min(start, m.index);
+			end = Math.max(end, m.index + m.matchLength);
+		}
+		const originalBlock = baseContent.substring(start, end);
+		// Build the new block: each edit's newText replaces its oldText range within the union
+		let rebuilt = originalBlock;
+		for (const idx of indices) {
+			const m = fuzzyFindText(baseContent, normalizedEdits[idx]!.oldText);
+			const localStart = m.index - start;
+			const localEnd = localStart + m.matchLength;
+			rebuilt = rebuilt.substring(0, localStart) + normalizedEdits[idx]!.newText + rebuilt.substring(localEnd);
+		}
+		merged.push({ oldText: originalBlock, newText: rebuilt, replaceAll: false });
+	}
+
+	return applyEditsToNormalizedContent(baseContent, merged, path);
 }
 
 /** Generate a standard unified patch. */

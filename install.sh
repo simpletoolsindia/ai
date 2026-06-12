@@ -119,6 +119,31 @@ run() {
 }
 
 # ---------------------------------------------------------------------------
+# Compare version strings (semver-ish: major.minor.patch)
+# ---------------------------------------------------------------------------
+
+# Returns: 0 if $1 >= $2, 1 otherwise
+version_gte() {
+	local v1="$1" v2="$2"
+	while [ "${#v1}" -lt "${#v2}" ]; do v1="$v1.0"; done
+	while [ "${#v2}" -lt "${#v1}" ]; do v2="$v2.0"; done
+	[ "$v1" = "$v2" ] && return 0
+	local IFS=.
+	local v1_parts=($v1) v2_parts=($v2)
+	local i
+	for i in "${!v1_parts[@]}"; do
+		local p1="${v1_parts[$i]:-0}"
+		local p2="${v2_parts[$i]:-0}"
+		p1="${p1%%[!0-9]*}"
+		p2="${p2%%[!0-9]*}"
+		p1="${p1:-0}"; p2="${p2:-0}"
+		if [ "$p1" -gt "$p2" ]; then return 0; fi
+		if [ "$p1" -lt "$p2" ]; then return 1; fi
+	done
+	return 0
+}
+
+# ---------------------------------------------------------------------------
 # Usage
 # ---------------------------------------------------------------------------
 
@@ -265,31 +290,6 @@ backup_user_data() {
 	else
 		warn "Could not back up $PREFIX/agent (cp failed). Continuing."
 	fi
-}
-
-# ---------------------------------------------------------------------------
-# Compare version strings (semver-ish: major.minor.patch)
-# ---------------------------------------------------------------------------
-
-# Returns: 0 if $1 >= $2, 1 otherwise
-version_gte() {
-	local v1="$1" v2="$2"
-	while [ "${#v1}" -lt "${#v2}" ]; do v1="$v1.0"; done
-	while [ "${#v2}" -lt "${#v1}" ]; do v2="$v2.0"; done
-	[ "$v1" = "$v2" ] && return 0
-	local IFS=.
-	local v1_parts=($v1) v2_parts=($v2)
-	local i
-	for i in "${!v1_parts[@]}"; do
-		local p1="${v1_parts[$i]:-0}"
-		local p2="${v2_parts[$i]:-0}"
-		p1="${p1%%[!0-9]*}"
-		p2="${p2%%[!0-9]*}"
-		p1="${p1:-0}"; p2="${p2:-0}"
-		if [ "$p1" -gt "$p2" ]; then return 0; fi
-		if [ "$p1" -lt "$p2" ]; then return 1; fi
-	done
-	return 0
 }
 
 # ---------------------------------------------------------------------------

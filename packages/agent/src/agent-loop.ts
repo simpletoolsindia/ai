@@ -568,9 +568,36 @@ async function prepareToolCall(
 ): Promise<PreparedToolCall | ImmediateToolCallOutcome> {
 	const tool = currentContext.tools?.find((t) => t.name === toolCall.name);
 	if (!tool) {
+		// Build a useful error so the LLM can self-correct. List the
+		// available tools and explicitly flag likely parameter-name
+		// confusion (e.g. "replaceLines", "edits", "oldText", "newText"
+		// are PARAMETERS of `edit`, not tool names).
+		const available = (currentContext.tools ?? []).map((t) => t.name).join(", ");
+		const mutating = new Set(["write", "edit", "bash"]);
+		const isMutating = mutating.has(toolCall.name);
+		const planHint = isMutating
+			? `\nHint: "${toolCall.name}" is a mutating tool. It may be disabled because the agent is in PLAN (read-only) mode. Ask the user to run \`/mode execute\` to enable it, or use the read-only tools.`
+			: "";
+		const paramsAsTools = [
+			"replaceLines",
+			"edits",
+			"oldText",
+			"newText",
+			"path",
+			"replaceAll",
+			"command",
+			"query",
+			"pattern",
+			"glob",
+		];
+		const paramConfusionHint = paramsAsTools.includes(toolCall.name)
+			? `\nHint: "${toolCall.name}" is a PARAMETER of another tool (e.g. \`edit\`, \`bash\`, \`read\`, \`grep\`, \`find\`), not a tool name. Use the actual tool with this value as a parameter.`
+			: "";
 		return {
 			kind: "immediate",
-			result: createErrorToolResult(`Tool ${toolCall.name} not found`),
+			result: createErrorToolResult(
+				`Tool "${toolCall.name}" not found. Available tools: ${available || "(none)"}.${paramConfusionHint}${planHint}`,
+			),
 			isError: true,
 		};
 	}

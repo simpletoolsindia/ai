@@ -6845,11 +6845,21 @@ export class InteractiveMode {
 		const hint = new Container();
 		hint.addChild(
 			new Text(
-				theme.fg("accent", `  ${theme.bold("✓ Plan ready")}  —  press `) +
+				theme.fg("accent", `  ${theme.bold("\u2713 Plan ready")}  \u2014  press `) +
 					theme.bold(theme.fg("warning", "Tab")) +
-					theme.fg("accent", " or run `") +
+					theme.fg("accent", " (or type ") +
 					theme.bold(theme.fg("warning", "/mode execute")) +
-					theme.fg("accent", "` to start applying the plan."),
+					theme.fg("accent", ") to switch to EXECUTE mode and apply the plan."),
+				0,
+				0,
+			),
+		);
+		hint.addChild(
+			new Text(
+				theme.fg(
+					"dim",
+					"    (In PLAN mode, write/edit/bash are disabled. Switch to EXECUTE to apply the changes.)",
+				),
 				0,
 				0,
 			),

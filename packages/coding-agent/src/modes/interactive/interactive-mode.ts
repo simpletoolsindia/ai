@@ -16,6 +16,7 @@ import {
 	type Model,
 	type OAuthProviderId,
 	type OAuthSelectPrompt,
+	type TextContent,
 } from "@simpletoolsindiaorg/ai-provider";
 import type {
 	AutocompleteItem,
@@ -207,6 +208,34 @@ function isAnthropicSubscriptionAuthKey(apiKey: string | undefined): boolean {
 
 function isUnknownModel(model: Model<any> | undefined): boolean {
 	return !!model && model.provider === "unknown" && model.id === "unknown" && model.api === "unknown";
+}
+
+/**
+ * Extract a one-line error string from a tool_execution_end event result.
+ * Walks the standard {content: [{type: "text", text: ...}]} shape and
+ * returns the first text block. Strips trailing newlines and "Error: "
+ * prefixes so the chat shows a clean, brief line.
+ */
+function extractToolErrorText(event: AgentSessionEvent): string {
+	const result = (event as { result?: { content?: unknown } }).result;
+	if (!result?.content) return "";
+	const content = result.content as unknown;
+	if (typeof content === "string") return content.trim();
+	if (Array.isArray(content)) {
+		for (const block of content) {
+			if (
+				block &&
+				typeof block === "object" &&
+				"type" in block &&
+				(block as { type: unknown }).type === "text" &&
+				"text" in block &&
+				typeof (block as { text: unknown }).text === "string"
+			) {
+				return (block as { text: string }).text.trim();
+			}
+		}
+	}
+	return "";
 }
 
 function quoteIfNeeded(value: string): string {
@@ -597,6 +626,27 @@ export class InteractiveMode {
 		if (this.editor !== this.defaultEditor) {
 			this.editor.setAutocompleteProvider?.(provider);
 		}
+	}
+
+	/**
+	 * Build a brief, user-visible summary of a tool failure. The LLM still
+	 * receives the full `event.result`; this is purely a display summary.
+	 * Returns the result with truncated content (max ~300 chars) and a
+	 * leading warning icon. The full content is preserved for the
+	 * LLM-visible details via the original event.
+	 */
+	private makeToolErrorSummary(event: AgentSessionEvent): { content: TextContent[]; details: unknown } {
+		const MAX_PREVIEW = 300;
+		const text = extractToolErrorText(event);
+		const truncated = text.length > MAX_PREVIEW ? `${text.slice(0, MAX_PREVIEW)}\u2026` : text;
+		const toolName = "toolName" in event ? (event as { toolName: string }).toolName : "tool";
+		const summary = truncated
+			? `\u26a0\ufe0f ${toolName}: ${truncated}`
+			: `\u26a0\ufe0f ${toolName} failed`;
+		return {
+			content: [{ type: "text" as const, text: summary }],
+			details: (event as { result?: { details?: unknown } }).result?.details,
+		};
 	}
 
 	private showStartupNoticesIfNeeded(): void {
@@ -3128,17 +3178,13 @@ export class InteractiveMode {
 			case "tool_execution_end": {
 				const component = this.pendingTools.get(event.toolCallId);
 				if (component) {
-					// Hide verbose tool errors from the user — the agent handles them.
-					// Replace with a brief summary so the chat stays clean.
-					const displayResult = event.isError
-						? {
-								...event.result,
-								content: event.result.content
-									? [{ type: "text" as const, text: `⚠️ ${event.toolName} failed — agent will retry` }]
-									: `⚠️ ${event.toolName} failed — agent will retry`,
-								isError: true,
-							}
-						: event.result;
+					// Show a brief, informative error to the user. We DO NOT
+					// claim "agent will retry" because that's an LLM decision
+					// we can't predict. We extract a one-line summary from the
+					// tool's own error content so the user can see what
+					// actually went wrong (path not found, syntax error,
+					// timeout, etc.) and decide whether to intervene.
+					const displayResult = event.isError ? this.makeToolErrorSummary(event) : event.result;
 					component.updateResult({ ...displayResult, isError: event.isError });
 					this.pendingTools.delete(event.toolCallId);
 					// Tool is done; the model will receive the result and

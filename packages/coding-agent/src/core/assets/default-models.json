@@ -8,13 +8,33 @@
 	//
 	// Each entry below either auto-discovers a local server (Ollama /
 	// LM Studio / vLLM) or is a placeholder you fill in with an API
-	// key. Lines starting with // are comments and are stripped on load.
+	// key. Lines starting with // are comments and are stripped on
+	// load.
 	//
 	// Quick start:
 	//   1. Install Ollama (https://ollama.com) and pull a model:
 	//        ollama pull gemma4:e2b
 	//   2. Open `/model` in ai — your local models are listed.
 	//   3. For cloud providers, run `/login` and add a key.
+	//
+	// Local-model performance hints (the defaults below are tuned for
+	// snappy local inference on consumer hardware; tune for your box):
+	//
+	//   num_ctx:        context window in tokens. The Ollama default
+	//                   (2048) is the sweet spot for coding tasks.
+	//                   Bigger = slower. Most agents never use more
+	//                   than 2-4K tokens of context per turn, so 2K
+	//                   keeps inference ~2x faster than 8K.
+	//   num_gpu:        number of model layers to offload to GPU.
+	//                   Omit to let Ollama auto-detect.
+	//   num_thread:     CPU threads. Omit to let Ollama auto-detect.
+	//   keep_alive:     how long Ollama keeps the model in memory
+	//                   after the last request. "30m" avoids the
+	//                   5-10 s cold-start on every turn.
+	//
+	// To see the live settings for the running model, run
+	// `/diag ollama` in ai. It prints `ollama ps`, the configured
+	// model, and per-model options.
 
 	"providers": {
 		// Local Ollama. The `autoDiscover: "ollama"` flag tells ai to

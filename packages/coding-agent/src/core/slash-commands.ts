@@ -69,4 +69,9 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	},
 	{ name: "reload", description: "Reload keybindings, extensions, skills, prompts, and themes" },
 	{ name: "quit", description: `Quit ${APP_NAME}` },
+	{
+		name: "diag",
+		description:
+			"Diagnostics. Without args, shows agent dir / providers / auth / model. `/diag ollama` shows local Ollama runtime info and tuning tips.",
+	},
 ];

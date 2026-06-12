@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { Agent, type AgentMessage, type ThinkingLevel } from "@simpletoolsindiaorg/ai-agent";
+import { clearStaleToolResults } from "@simpletoolsindiaorg/ai-agent/harness/tool-result-clearing";
 import { clampThinkingLevel, type Message, type Model, streamSimple } from "@simpletoolsindiaorg/ai-provider";
 import { getAgentDir } from "../config.ts";
 import { resolvePath } from "../utils/paths.ts";
@@ -8,8 +9,8 @@ import { formatNoModelsAvailableMessage } from "./auth-guidance.ts";
 import { AuthStorage } from "./auth-storage.ts";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.ts";
 import type { ExtensionRunner, LoadExtensionsResult, SessionStartEvent, ToolDefinition } from "./extensions/index.ts";
-import { convertToLlm } from "./messages.ts";
 import { withImageBlock } from "./image-block-filter.ts";
+import { convertToLlm } from "./messages.ts";
 import { ModelRegistry } from "./model-registry.ts";
 import { findInitialModel } from "./model-resolver.ts";
 import { mergeProviderAttributionHeaders } from "./provider-attribution.ts";
@@ -282,9 +283,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	// Wrap `convertToLlm` with the image-block filter so that toggling
 	// the `blockImages` setting at runtime takes effect immediately.
 	// See `core/image-block-filter.ts` for the filter logic.
-	const convertToLlmWithBlockImages = withImageBlock(convertToLlm, () =>
-		settingsManager.getBlockImages(),
-	);
+	const convertToLlmWithBlockImages = withImageBlock(convertToLlm, () => settingsManager.getBlockImages());
 
 	const extensionRunnerRef: { current?: ExtensionRunner } = {};
 
@@ -354,9 +353,16 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		},
 		sessionId: sessionManager.getSessionId(),
 		transformContext: async (messages) => {
+			// 1. Tool-result clearing (cheap, O(n) over messages). Replaces
+			//    the content of stale tool results with a one-line marker
+			//    so a long session doesn't run out of context window. Runs
+			//    first so the extension context sees the slimmed-down
+			//    messages.
+			const cleared = clearStaleToolResults(messages, settingsManager.getToolResultClearing());
+			// 2. Extension context (event bus, hermes-memory, etc.).
 			const runner = extensionRunnerRef.current;
-			if (!runner) return messages;
-			return runner.emitContext(messages);
+			if (!runner) return cleared;
+			return runner.emitContext(cleared);
 		},
 		steeringMode: settingsManager.getSteeringMode(),
 		followUpMode: settingsManager.getFollowUpMode(),

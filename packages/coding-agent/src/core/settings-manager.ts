@@ -100,6 +100,17 @@ export type PackageSource =
 			themes?: string[];
 	  };
 
+export interface ToolResultClearingSettings {
+	/** Master switch. Default: true (cheap and good for long sessions). */
+	enabled?: boolean;
+	/** Clear results older than this many turns. Default: 5. */
+	clearAfterTurns?: number;
+	/** Never clear the most recent N tool results. Default: 3. */
+	keepRecent?: number;
+	/** Minimum content size in bytes before clearing kicks in. Default: 2048. */
+	minSizeToClear?: number;
+}
+
 export interface LocalOtelSettings {
 	/** Enable the local OpenTelemetry-style logger. Default: false (zero overhead). */
 	enabled?: boolean;
@@ -144,6 +155,7 @@ export interface Settings {
 	enableInstallTelemetry?: boolean; // default: false (as of 0.85.0) — the install-telemetry fetch was removed; this flag is kept as a no-op for back-compat. Use `localOtel` for local observability.
 	enableVersionCheck?: boolean; // default: false — opt-in: ask the upstream API if a newer ai version is available
 	localOtel?: LocalOtelSettings; // Local OpenTelemetry-style structured logs written to disk (opt-in)
+	toolResultClearing?: ToolResultClearingSettings; // Context-saver: clear stale read/bash/etc. results (on by default)
 	shareViewerUrl?: string; // override the base URL for /share (default: https://api.simpletoolsindiaorg.invalid/session/)
 	packages?: PackageSource[]; // Array of npm/git package sources (string or object with filtering)
 	extensions?: string[]; // Array of local extension file paths or directories
@@ -1006,6 +1018,16 @@ export class SettingsManager {
 			maxPromptBytes: typeof s.maxPromptBytes === "number" && s.maxPromptBytes > 0 ? s.maxPromptBytes : 100_000,
 			includeToolIO: s.includeToolIO !== false,
 			rotatePerSession: s.rotatePerSession === true,
+		};
+	}
+
+	getToolResultClearing(): ToolResultClearingSettings {
+		const s = this.settings.toolResultClearing ?? {};
+		return {
+			enabled: s.enabled !== false,
+			clearAfterTurns: typeof s.clearAfterTurns === "number" && s.clearAfterTurns > 0 ? s.clearAfterTurns : 5,
+			keepRecent: typeof s.keepRecent === "number" && s.keepRecent >= 0 ? s.keepRecent : 3,
+			minSizeToClear: typeof s.minSizeToClear === "number" && s.minSizeToClear > 0 ? s.minSizeToClear : 2048,
 		};
 	}
 

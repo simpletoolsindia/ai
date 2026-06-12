@@ -207,9 +207,16 @@ ${guidelines}`;
 		prompt += formatSkillsForPrompt(skills);
 	}
 
-	// Add date and working directory last
-	prompt += `\nCurrent date: ${date}`;
-	prompt += `\nCurrent working directory: ${promptCwd}`;
+	// NOTE: date and cwd are intentionally NOT appended to the system
+	// prompt. They are session-volatile (change per turn) and would
+	// bust the prompt cache on Anthropic/OpenAI every turn. They are
+	// now injected as a separate user message in the agent session
+	// (see `buildSessionContextMessage` in agent-session.ts) so the
+	// system prompt prefix stays byte-identical for cache hits.
+	// Compute them so the build options interface still parses, but
+	// do not append.
+	void date;
+	void promptCwd;
 
 	return prompt;
 }

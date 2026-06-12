@@ -553,6 +553,17 @@ function buildParams(
 		params.tool_choice = options.toolChoice;
 	}
 
+	// Local Ollama tuning. The OpenAI-compat endpoint at
+	// /v1/chat/completions accepts a `keep_alive` field which sets how
+	// long the model stays loaded in VRAM/RAM after the request. Default
+	// is 5m which forces a 5-10s cold-start on every turn for slow local
+	// models. Bumping to 30m saves the cold-start. The `num_ctx` knob
+	// is not exposed via the OpenAI-compat body; tell the user to set
+	// the OLLAMA_NUM_CTX env var instead.
+	if (model.provider === "ollama" || model.baseUrl.includes("localhost:11434")) {
+		(params as any).keep_alive = "30m";
+	}
+
 	if (compat.thinkingFormat === "zai" && model.reasoning) {
 		(params as any).enable_thinking = !!options?.reasoningEffort;
 	} else if (compat.thinkingFormat === "qwen" && model.reasoning) {

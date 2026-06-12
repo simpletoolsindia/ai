@@ -2730,6 +2730,15 @@ export class InteractiveMode {
 				this.editor.setText("");
 				return;
 			}
+			if (text === "/diag" || text.startsWith("/diag ")) {
+				await this.handleDiagCommand(text);
+				this.editor.setText("");
+				return;
+			}
+			if (text === "/reload") {
+				this.editor.setText("");
+				return;
+			}
 			if (text === "/help") {
 				this.handleHelpCommand();
 				this.editor.setText("");
@@ -6108,6 +6117,129 @@ export class InteractiveMode {
 	 */
 	private getEditorKeyDisplay(action: Keybinding): string {
 		return keyDisplayText(action);
+	}
+
+	/**
+	 * `/diag [ollama]` — diagnostic dump.
+	 *   `/diag`         — show agent dir, providers, current model, auth, models.json path
+	 *   `/diag ollama`  — show local Ollama runtime info + tuning tips
+	 */
+	private async handleDiagCommand(text: string): Promise<void> {
+		const arg = text
+			.replace(/^\/diag\s*/, "")
+			.trim()
+			.toLowerCase();
+		if (arg === "ollama") {
+			await this.runOllamaDiag();
+			return;
+		}
+		// Default: generic diag dump
+		const agentDir = getAgentDir();
+		const modelsPath = path.join(agentDir, "models.json");
+		const authPath = path.join(agentDir, "auth.json");
+		const settingsPath = path.join(agentDir, "settings.json");
+		const model = this.session.model;
+		const modelLabel = model
+			? `${model.provider}/${model.id}` + (model.baseUrl ? ` (${model.baseUrl})` : "")
+			: "none selected";
+		const providers = this.session.modelRegistry.getAvailable().map((m) => `${m.provider}/${m.id}`);
+		const lines = [
+			`Agent dir:    ${agentDir}`,
+			`models.json:  ${fs.existsSync(modelsPath) ? "present" : "missing"}`,
+			`auth.json:    ${fs.existsSync(authPath) ? "present" : "missing"}`,
+			`settings.json: ${fs.existsSync(settingsPath) ? "present" : "missing"}`,
+			`Current model: ${modelLabel}`,
+			`Available models: ${providers.length} (${providers.slice(0, 5).join(", ")}${providers.length > 5 ? "..." : ""})`,
+			`Mode: ${this.settingsManager.getAgentMode()}`,
+			`localOtel: ${this.settingsManager.getLocalOtel().enabled ? "on" : "off"}`,
+			`Version check: ${this.settingsManager.getEnableVersionCheck() ? "on" : "off"}`,
+			"",
+			"Subcommands: /diag ollama  — show local Ollama runtime info and tuning tips",
+		];
+		this.showStatus(lines.join("\n"));
+	}
+
+	private async runOllamaDiag(): Promise<void> {
+		const lines: string[] = ["Ollama diagnostics", "================="];
+
+		// 1. Check ollama binary
+		const ollamaPath = await this.runCmd("which ollama");
+		lines.push(`Binary:        ${ollamaPath || "not found"}`);
+
+		// 2. ollama --version
+		if (ollamaPath) {
+			const version = await this.runCmd("ollama --version");
+			lines.push(`Version:       ${version || "(unknown)"}`);
+		}
+
+		// 3. ollama ps (running models)
+		const ps = await this.runCmd("ollama ps");
+		lines.push("");
+		lines.push("Running models (`ollama ps`):");
+		lines.push(ps || "(none — no models loaded)");
+
+		// 4. Pulled models
+		const list = await this.runCmd("ollama list");
+		lines.push("");
+		lines.push("Pulled models (`ollama list`):");
+		lines.push(list || "(none)");
+
+		// 5. Live env vars
+		lines.push("");
+		lines.push("Tuning env vars (current shell):");
+		lines.push(`  OLLAMA_NUM_CTX:         ${process.env.OLLAMA_NUM_CTX || "(not set; default 2048)"}`);
+		lines.push(`  OLLAMA_KEEP_ALIVE:     ${process.env.OLLAMA_KEEP_ALIVE || "(not set; default 5m)"}`);
+		lines.push(`  OLLAMA_NUM_GPU:        ${process.env.OLLAMA_NUM_GPU || "(not set; auto)"}`);
+		lines.push(`  OLLAMA_NUM_PARALLEL:   ${process.env.OLLAMA_NUM_PARALLEL || "(not set)"}`);
+
+		// 6. Performance tips
+		lines.push("");
+		lines.push("Performance tips for local Ollama:");
+		lines.push("  - Set OLLAMA_NUM_CTX=2048 (or 4096) to keep inference fast.");
+		lines.push("  - Use Q4_K_M quantization (default for most pulls).");
+		lines.push("  - ai sends keep_alive=30m per request, so models stay loaded.");
+		lines.push("  - Move system prompt date and cwd out (0.86.0) so the");
+		lines.push("    LLM doesn't waste tokens re-reading them each turn.");
+		lines.push("  - Use tool-result clearing (0.86.0) to keep context small.");
+
+		this.showStatus(lines.join("\n"));
+	}
+
+	private async runCmd(cmd: string): Promise<string> {
+		try {
+			const { spawn } = await import("node:child_process");
+			return await new Promise<string>((resolve) => {
+				let stdout = "";
+				let resolved = false;
+				const child = spawn(cmd, { shell: true });
+				child.stdout?.on("data", (chunk) => (stdout += chunk.toString()));
+				child.on("close", () => {
+					if (!resolved) {
+						resolved = true;
+						resolve(stdout.trim() || "");
+					}
+				});
+				child.on("error", () => {
+					if (!resolved) {
+						resolved = true;
+						resolve("");
+					}
+				});
+				setTimeout(() => {
+					if (!resolved) {
+						resolved = true;
+						try {
+							child.kill();
+						} catch {
+							// ignore
+						}
+						resolve(stdout.trim() || "");
+					}
+				}, 3000);
+			});
+		} catch {
+			return "";
+		}
 	}
 
 	private handleHotkeysCommand(): void {

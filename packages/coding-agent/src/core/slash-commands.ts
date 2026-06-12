@@ -74,4 +74,9 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 		description:
 			"Diagnostics. Without args, shows agent dir / providers / auth / model. `/diag ollama` shows local Ollama runtime info and tuning tips.",
 	},
+	{
+		name: "update",
+		description:
+			"Update the running ai install to the latest version on npm. `/update check` forces a one-shot version check; `/update` starts the self-update in the background and tells you to restart.",
+	},
 ];

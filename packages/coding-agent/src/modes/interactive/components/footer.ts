@@ -131,10 +131,7 @@ export class FooterComponent implements Component {
 		// in dim (so it doesn't dominate the footer). The badge goes on
 		// the cwd/branch line so it's always visible.
 		const mode = this.session.getMode();
-		const modeBadge =
-			mode === "plan"
-				? theme.fg("warning", "PLAN")
-				: theme.fg("dim", "EXECUTE");
+		const modeBadge = mode === "plan" ? theme.fg("warning", "PLAN") : theme.fg("dim", "EXECUTE");
 		pwd = `${pwd} \u2502 ${modeBadge}`;
 
 		// Build stats line
@@ -242,6 +239,15 @@ export class FooterComponent implements Component {
 			const process = this.footerData.getCurrentProcess() ?? "running";
 			const toolLine = theme.fg("warning", `\u26A1 ${currentTool} \u2192 ${process}`);
 			lines.push(truncateToWidth(toolLine, width, theme.fg("dim", "...")));
+		}
+
+		// Update-available notification. Shown when a newer ai version
+		// is published. One tap on `/update` and the agent upgrades in
+		// place. Preempts the "wait, what version am I on?" problem.
+		const updateVersion = this.footerData.getUpdateAvailableVersion();
+		if (updateVersion) {
+			const updateLine = `${theme.fg("warning", "\u2B06 Update available:")} ${theme.fg("accent", `v${updateVersion}`)} ${theme.fg("dim", "\u2014")} ${theme.fg("accent", "/update")}`;
+			lines.push(truncateToWidth(updateLine, width, theme.fg("dim", "...")));
 		}
 
 		// Add extension statuses on a single line, sorted by key alphabetically

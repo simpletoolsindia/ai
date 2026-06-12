@@ -760,14 +760,21 @@ export class InteractiveMode {
 	async run(): Promise<void> {
 		await this.init();
 
-		// Start version check asynchronously. As of 0.85.0, the version
-		// check is opt-in via `enableVersionCheck` in settings.json. The
-		// 10s remote request no longer runs by default.
+		// Start version check asynchronously. As of 0.85.3, the check
+		// runs by default (single remote call, ~1s, no auto-update) and
+		// surfaces a one-line footer notification + a chat banner.
+		// Set `enableVersionCheck: false` in settings.json to disable.
 		const versionCheckEnabled = this.settingsManager.getEnableVersionCheck();
 		if (versionCheckEnabled) {
 			checkForNewAiVersion(this.version, { enabled: true }).then((newRelease) => {
 				if (newRelease) {
+					// Footer: persistent one-line indicator at the bottom
+					// of the screen. Preempts the user missing the chat
+					// banner when they scroll up.
+					this.footerDataProvider.setUpdateAvailable(newRelease.version, newRelease.note ?? null);
+					// Chat: full banner with release note + changelog link.
 					this.showNewVersionNotification(newRelease);
+					this.ui.requestRender();
 				}
 			});
 		}
@@ -2735,6 +2742,11 @@ export class InteractiveMode {
 				this.editor.setText("");
 				return;
 			}
+			if (text === "/update" || text.startsWith("/update ")) {
+				await this.handleUpdateCommand(text);
+				this.editor.setText("");
+				return;
+			}
 			if (text === "/reload") {
 				this.editor.setText("");
 				return;
@@ -4068,7 +4080,7 @@ export class InteractiveMode {
 	}
 
 	showNewVersionNotification(release: LatestAiRelease): void {
-		const action = theme.fg("accent", `${APP_NAME} update`);
+		const action = theme.fg("accent", `/update`);
 		const updateInstruction = theme.fg("muted", `New version ${release.version} is available. Run `) + action;
 		const changelogUrl = "https://github.com/simpletoolsindiaorg/ai/blob/main/packages/coding-agent/CHANGELOG.md";
 		const changelogLink = getCapabilities().hyperlinks
@@ -6203,6 +6215,79 @@ export class InteractiveMode {
 		lines.push("  - Use tool-result clearing (0.86.0) to keep context small.");
 
 		this.showStatus(lines.join("\n"));
+	}
+
+	/**
+	 * `/update` — update the running ai install to the latest version
+	 * published on npm. Spawns `ai update self` as a detached child
+	 * process so the TUI stays responsive. When the install finishes
+	 * the user is told to restart ai manually (the running process
+	 * holds a lock on its own dist/).
+	 */
+	private async handleUpdateCommand(text: string): Promise<void> {
+		const arg = text.replace(/^\/update\s*/, "").trim();
+		if (arg === "check") {
+			// Force a one-shot version check now.
+			this.showStatus("Checking for updates...");
+			const release = await checkForNewAiVersion(this.version, { enabled: true }).catch(() => undefined);
+			if (!release) {
+				this.showStatus(`You're on the latest version (v${this.version}).`);
+				return;
+			}
+			this.footerDataProvider.setUpdateAvailable(release.version, release.note ?? null);
+			this.ui.requestRender();
+			this.showStatus(`Update available: v${release.version}. Run /update to install.`);
+			return;
+		}
+
+		// Default: spawn the self-update. The user can also run
+		// `ai update self` from a shell — both paths run the same code.
+		const target = this.footerDataProvider.getUpdateAvailableVersion();
+		const headline = target
+			? `Updating ${APP_NAME} v${this.version} \u2192 v${target}...`
+			: `Updating ${APP_NAME} to the latest version...`;
+		this.showStatus(headline);
+
+		try {
+			// Resolve the binary path: prefer `process.execPath` so we
+			// re-invoke the same Node that is currently running ai, then
+			// fall back to whatever is on PATH.
+			const { spawn } = await import("node:child_process");
+			const isNode =
+				process.execPath.toLowerCase().endsWith("node") || process.execPath.toLowerCase().endsWith("node.exe");
+			const aiPath = process.execPath;
+			// Run `ai update self` as a detached child. We use `shell: true`
+			// so the user can interrupt via Ctrl+C in the TUI without
+			// killing the install. The install runs in its own process
+			// group and will complete even if the TUI exits.
+			const args = isNode ? [aiPath, aiPath /* placeholder: replaced below */] : ["ai", "update", "self"];
+			// We need a reliable way to invoke "ai update self". The
+			// current executable is the ai CLI (when run via `npm install
+			// -g` or as a bun binary) OR a node binary. Use the resolved
+			// `ai` on PATH so we get the same install method that the
+			// user invoked. This is the most reliable approach because
+			// npm-managed ai is just a symlink to a node script that
+			// resolves to the coding-agent's dist/cli.js.
+			const cmd = "ai";
+			const cmdArgs = ["update", "self"];
+			const child = spawn(cmd, cmdArgs, {
+				shell: true,
+				detached: true,
+				stdio: "ignore",
+				env: { ...process.env, AI_CODING_AGENT_TUI_CHILD: "1" },
+			});
+			child.unref();
+			void args; // silence unused
+			this.showStatus(
+				`${APP_NAME} self-update started in the background (pid ${child.pid ?? "?"}).\n` +
+					`When it finishes, quit this session and run \`${cmd}\` again to use the new version.`,
+			);
+		} catch (err) {
+			this.showStatus(
+				`Could not start self-update: ${err instanceof Error ? err.message : String(err)}\n` +
+					`Run \`ai update self\` from a shell to update manually.`,
+			);
+		}
 	}
 
 	private async runCmd(cmd: string): Promise<string> {

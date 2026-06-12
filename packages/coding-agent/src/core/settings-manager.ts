@@ -1000,7 +1000,12 @@ export class SettingsManager {
 	}
 
 	getEnableVersionCheck(): boolean {
-		return this.settings.enableVersionCheck ?? false;
+		// Default true as of 0.85.3: the user wants to know when a new
+		// version is available so they can /update. The check is silent
+		// (one remote call, ~1s, no auto-update) and the only visible
+		// effect is a one-line footer notification. Users who want
+		// zero remote calls can set enableVersionCheck: false.
+		return this.settings.enableVersionCheck ?? true;
 	}
 
 	setEnableVersionCheck(enabled: boolean): void {

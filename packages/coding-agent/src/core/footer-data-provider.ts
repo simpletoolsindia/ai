@@ -117,6 +117,13 @@ export class FooterDataProvider {
 	private currentToolName: string | null = null;
 	/** Current process description (shown in footer). */
 	private currentProcess: string | null = null;
+	/**
+	 * Latest available ai version, when newer than the running build.
+	 * Shown in the footer as "Update available: vX.Y.Z — /update".
+	 * Set to null to clear.
+	 */
+	private updateAvailableVersion: string | null = null;
+	private updateAvailableNote: string | null = null;
 	private refreshTimer: ReturnType<typeof setTimeout> | null = null;
 	private gitWatcherRetryTimer: ReturnType<typeof setTimeout> | null = null;
 	private refreshInFlight = false;
@@ -157,6 +164,25 @@ export class FooterDataProvider {
 	/** Get the current process description. */
 	getCurrentProcess(): string | null {
 		return this.currentProcess;
+	}
+
+	/**
+	 * Set or clear the "new version available" notification shown in
+	 * the footer. Pass `null` to clear.
+	 */
+	setUpdateAvailable(version: string | null, note?: string | null): void {
+		this.updateAvailableVersion = version;
+		this.updateAvailableNote = note ?? null;
+	}
+
+	/** Get the latest available version, or null if up-to-date. */
+	getUpdateAvailableVersion(): string | null {
+		return this.updateAvailableVersion;
+	}
+
+	/** Optional release note for the latest version. */
+	getUpdateAvailableNote(): string | null {
+		return this.updateAvailableNote;
 	}
 
 	/** Current git branch, null if not in repo, "detached" if detached HEAD */
@@ -420,5 +446,11 @@ export class FooterDataProvider {
 /** Read-only view for extensions - excludes setExtensionStatus, setAvailableProviderCount and dispose */
 export type ReadonlyFooterDataProvider = Pick<
 	FooterDataProvider,
-	"getGitBranch" | "getExtensionStatuses" | "getAvailableProviderCount" | "getCurrentTool" | "getCurrentProcess" | "onBranchChange"
+	| "getGitBranch"
+	| "getExtensionStatuses"
+	| "getAvailableProviderCount"
+	| "getCurrentTool"
+	| "getCurrentProcess"
+	| "getUpdateAvailableVersion"
+	| "onBranchChange"
 >;

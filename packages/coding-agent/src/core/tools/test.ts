@@ -256,8 +256,8 @@ export function createTestToolDefinition(_cwd: string): ToolDefinition<typeof te
 		],
 		parameters: testSchema,
 		prepareArguments: prepareTestArguments,
-		async execute(args, context) {
-			const { pattern, watch = false, timeout = 120 } = args;
+		async execute(toolCallId, params, signal, onUpdate, ctx) {
+			const { pattern, watch = false, timeout = 120 } = params;
 
 			// Detect test runner
 			const runner = await detectTestRunner(_cwd);

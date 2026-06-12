@@ -211,8 +211,8 @@ export function createMultiEditToolDefinition(
 		],
 		parameters: multiEditSchema,
 		prepareArguments: prepareMultiEditArguments,
-		async execute(args, context) {
-			const { edits } = args;
+		async execute(toolCallId, params, signal, onUpdate, ctx) {
+			const { edits } = params;
 			let filesModified = 0;
 			let editsApplied = 0;
 			const errors: string[] = [];

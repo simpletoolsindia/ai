@@ -16,7 +16,7 @@ import type { PromptTemplate } from "./prompt-templates.ts";
 import { loadPromptTemplates } from "./prompt-templates.ts";
 import { SettingsManager } from "./settings-manager.ts";
 import type { Skill } from "./skills.ts";
-import { loadSkillsFromDirsAsync } from "./skills-async.ts";
+import { loadSkillsAsync, loadSkillsFromDirsAsync } from "./skills-async.ts";
 import { createSourceInfo, type SourceInfo } from "./source-info.ts";
 
 export interface ResourceExtensionPaths {

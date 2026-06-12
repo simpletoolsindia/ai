@@ -233,7 +233,6 @@ async function loadSkillFromFileAsync(
 		if (nameErrors.length > 0) {
 			diagnostics.push({
 				type: "warning",
-				code: "invalid_skill_name",
 				message: `Invalid skill name "${name}": ${nameErrors.join(", ")}`,
 				path: filePath,
 			});
@@ -248,7 +247,6 @@ async function loadSkillFromFileAsync(
 		if (descErrors.length > 0) {
 			diagnostics.push({
 				type: "warning",
-				code: "invalid_skill_description",
 				message: `Invalid skill description: ${descErrors.join(", ")}`,
 				path: filePath,
 			});
@@ -270,7 +268,6 @@ async function loadSkillFromFileAsync(
 	} catch (error) {
 		diagnostics.push({
 			type: "warning",
-			code: "skill_load_failed",
 			message: `Failed to load skill: ${error instanceof Error ? error.message : String(error)}`,
 			path: filePath,
 		});
@@ -395,7 +392,6 @@ async function loadSkillsFromDirInternalAsync(
 	} catch (error) {
 		diagnostics.push({
 			type: "warning",
-			code: "skill_dir_read_failed",
 			message: `Failed to read directory: ${error instanceof Error ? error.message : String(error)}`,
 			path: dir,
 		});

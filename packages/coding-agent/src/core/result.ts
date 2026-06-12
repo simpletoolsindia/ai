@@ -189,7 +189,11 @@ export async function fromPromise<T>(promise: Promise<T>): Promise<Result<T, Err
  * Utility class for working with Results in a more fluent way.
  */
 export class ResultWrapper<TValue, TError = Error> {
-	constructor(private result: Result<TValue, TError>) {}
+	private result: Result<TValue, TError>;
+
+	constructor(result: Result<TValue, TError>) {
+		this.result = result;
+	}
 
 	/**
 	 * Get the underlying Result.

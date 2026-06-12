@@ -225,8 +225,8 @@ export function createApplyPatchToolDefinition(
 		],
 		parameters: applyPatchSchema,
 		prepareArguments: prepareApplyPatchArguments,
-		async execute(args, context) {
-			const { path: filePath, patch } = args;
+		async execute(toolCallId, params, signal, onUpdate, ctx) {
+			const { path: filePath, patch } = params;
 			const absolutePath = resolveToCwd(filePath, _cwd);
 
 			// Validate patch format

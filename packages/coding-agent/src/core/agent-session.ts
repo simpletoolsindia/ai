@@ -3162,9 +3162,11 @@ export class AgentSession {
 		const themeProvider = getDefaultThemeProvider();
 
 		// Create tool renderer if we have an extension runner (for custom tool HTML rendering)
+		// Note: themeProvider is a minimal ThemeProvider interface, but createToolHtmlRenderer
+		// expects the full Theme class. We cast here since the renderer only uses fg/bg/bold.
 		const toolRenderer: ToolHtmlRenderer = createToolHtmlRenderer({
 			getToolDefinition: (name) => this.getToolDefinition(name),
-			theme: themeProvider,
+			theme: themeProvider as any,
 			cwd: this.sessionManager.getCwd(),
 		});
 

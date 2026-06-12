@@ -63,16 +63,55 @@
 		//   "models": []
 		// },
 
-		// vLLM and other OpenAI-compatible servers. Uncomment and
-		// adjust the baseUrl to point at your server.
-		// "vllm": {
-		//   "baseUrl": "http://localhost:8000/v1",
-		//   "api": "openai-completions",
-		//   "apiKey": "vllm",
-		//   "autoDiscover": "openai",
-		//   "optionalApiKey": true,
-		//   "models": []
-		// },
+		// vLLM (https://docs.vllm.ai) - High-performance LLM serving
+		// with OpenAI-compatible API. Supports continuous batching,
+		// tensor parallelism, and GPU memory optimization.
+		// Start with: python -m vllm.entrypoints.openai.api_server --model <model> --port 8000
+		"vllm": {
+			"baseUrl": "http://localhost:8000/v1",
+			"api": "openai-completions",
+			"apiKey": "vllm",
+			"autoDiscover": "openai",
+			"optionalApiKey": true,
+			"models": []
+		},
+
+		// MLX LM (https://github.com/ml-explore/mlx-lm) - Apple Silicon
+		// optimized LLM serving with OpenAI-compatible API.
+		// Start with: mlx_lm.server --model <model> --port 8080
+		"mlx": {
+			"baseUrl": "http://localhost:8080/v1",
+			"api": "openai-completions",
+			"apiKey": "mlx",
+			"autoDiscover": "openai",
+			"optionalApiKey": true,
+			"models": []
+		},
+
+		// MLX OpenAI Server (https://github.com/cubist38/mlx-openai-server)
+		// - High-performance OpenAI-compatible server for MLX models.
+		// Start with: mlx-openai-server launch --model-path <model> --port 8000
+		"mlx-openai": {
+			"baseUrl": "http://localhost:8000/v1",
+			"api": "openai-completions",
+			"apiKey": "mlx-openai",
+			"autoDiscover": "openai",
+			"optionalApiKey": true,
+			"models": []
+		},
+
+		// vLLM-MLX (https://github.com/waybarrios/vllm-mlx) - OpenAI and
+		// Anthropic compatible server for Apple Silicon. Supports continuous
+		// batching, MCP tool calling, and multimodal support.
+		// Start with: vllm-mlx serve <model> --port 8000
+		"vllm-mlx": {
+			"baseUrl": "http://localhost:8000/v1",
+			"api": "openai-completions",
+			"apiKey": "vllm-mlx",
+			"autoDiscover": "openai",
+			"optionalApiKey": true,
+			"models": []
+		},
 
 		// Cloud providers. Run `/login` to add the API key; the key
 		// is stored in auth.json (chmod 0o600), not in this file.

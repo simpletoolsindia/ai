@@ -14,14 +14,16 @@ const webfetchSchema = Type.Object({
 	}),
 	maxBytes: Type.Optional(
 		Type.Number({
-			description: "Maximum response size in bytes to return inline (default: 102400 = 100KB, max: 1048576 = 1MB). Larger responses are truncated in the inline output and the full content is written to a temp file the LLM can read on demand.",
+			description:
+				"Maximum response size in bytes to return inline (default: 102400 = 100KB, max: 1048576 = 1MB). Larger responses are truncated in the inline output and the full content is written to a temp file the LLM can read on demand.",
 			minimum: 1024,
 			maximum: 1048576,
 		}),
 	),
 	spilloverMaxBytes: Type.Optional(
 		Type.Number({
-			description: "If the response exceeds maxBytes, write up to this many bytes to the spillover temp file (default: 10485760 = 10MB, max: 104857600 = 100MB). Set to 0 to disable spillover entirely.",
+			description:
+				"If the response exceeds maxBytes, write up to this many bytes to the spillover temp file (default: 10485760 = 10MB, max: 104857600 = 100MB). Set to 0 to disable spillover entirely.",
 			minimum: 0,
 			maximum: 104857600,
 		}),
@@ -372,11 +374,9 @@ export function createWebfetchToolDefinition(
 				try {
 					// If the full text is larger than spilloverMaxBytes, truncate at
 					// a char boundary (TextDecoder-safe) before writing.
-					const content =
-						text.length > spilloverMaxBytes
-							? text.slice(0, spilloverMaxBytes)
-							: text;
-					const ext = isHtml || contentType.includes("html") ? "html" : contentType.includes("json") ? "json" : "md";
+					const content = text.length > spilloverMaxBytes ? text.slice(0, spilloverMaxBytes) : text;
+					const ext =
+						isHtml || contentType.includes("html") ? "html" : contentType.includes("json") ? "json" : "md";
 					const result = spillToDisk(content, ext);
 					spilloverPath = result.path;
 					spilloverBytes = result.bytes;

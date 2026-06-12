@@ -35,6 +35,14 @@ import { parseStreamingJson } from "../utils/json-parse.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
 import { isCloudflareProvider, resolveCloudflareBaseUrl } from "./cloudflare.ts";
 import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.ts";
+import {
+	acquireConnection,
+	applyLocalModelOptimizations,
+	isLocalModel,
+	localModelQueue,
+	optimizeMessageHistory,
+	releaseConnection,
+} from "./local-model-optimizer.ts";
 import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.ts";
 import { buildBaseOptions } from "./simple-options.ts";
 import { transformMessages } from "./transform-messages.ts";
@@ -440,6 +448,36 @@ export const streamSimpleOpenAICompletions: StreamFunction<"openai-completions",
 	const reasoningEffort = clampedReasoning === "off" ? undefined : clampedReasoning;
 	const toolChoice = (options as OpenAICompletionsOptions | undefined)?.toolChoice;
 
+	// For local models, use request queuing to prevent overwhelming the server
+	if (isLocalModel(model)) {
+		const stream = new AssistantMessageEventStream();
+
+		// Queue the request for local models
+		localModelQueue.enqueue(async () => {
+			try {
+				await acquireConnection(model.baseUrl);
+				const result = streamOpenAICompletions(model, context, {
+					...base,
+					reasoningEffort,
+					toolChoice,
+				} satisfies OpenAICompletionsOptions);
+
+				// Forward events from the inner stream
+				for await (const event of result) {
+					stream.push(event);
+				}
+				stream.end();
+			} catch (error) {
+				stream.push({ type: "error", error: error instanceof Error ? error : new Error(String(error)) });
+				stream.end();
+			} finally {
+				releaseConnection(model.baseUrl);
+			}
+		});
+
+		return stream;
+	}
+
 	return streamOpenAICompletions(model, context, {
 		...base,
 		reasoningEffort,
@@ -500,7 +538,21 @@ function buildParams(
 	compat: ResolvedOpenAICompletionsCompat = getCompat(model),
 	cacheRetention: CacheRetention = resolveCacheRetention(options?.cacheRetention),
 ) {
-	const messages = convertMessages(model, context, compat);
+	// For local models, optimize message history to reduce context window usage
+	let optimizedContext = context;
+	if (isLocalModel(model)) {
+		const maxTokens = model.contextWindow || 2048;
+		const optimizedMessages = optimizeMessageHistory(
+			context.messages.map((m) => ({
+				role: m.role,
+				content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+			})),
+			maxTokens,
+		);
+		optimizedContext = { ...context, messages: optimizedMessages as typeof context.messages };
+	}
+
+	const messages = convertMessages(model, optimizedContext, compat);
 	const cacheControl = getCompatCacheControl(compat, cacheRetention);
 
 	const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
@@ -553,15 +605,11 @@ function buildParams(
 		params.tool_choice = options.toolChoice;
 	}
 
-	// Local Ollama tuning. The OpenAI-compat endpoint at
-	// /v1/chat/completions accepts a `keep_alive` field which sets how
-	// long the model stays loaded in VRAM/RAM after the request. Default
-	// is 5m which forces a 5-10s cold-start on every turn for slow local
-	// models. Bumping to 30m saves the cold-start. The `num_ctx` knob
-	// is not exposed via the OpenAI-compat body; tell the user to set
-	// the OLLAMA_NUM_CTX env var instead.
-	if (model.provider === "ollama" || model.baseUrl.includes("localhost:11434")) {
-		(params as any).keep_alive = "30m";
+	// Local model optimizations (Ollama, LM Studio, vLLM, etc.)
+	// Apply keep_alive, num_ctx, and other optimizations for local models
+	if (isLocalModel(model)) {
+		const optimizedParams = applyLocalModelOptimizations(params as Record<string, unknown>, model);
+		Object.assign(params, optimizedParams);
 	}
 
 	if (compat.thinkingFormat === "zai" && model.reasoning) {

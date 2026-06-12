@@ -19,7 +19,8 @@ const todoItemSchema = Type.Object({
 		}),
 	),
 	status: Type.Union([Type.Literal("pending"), Type.Literal("in_progress"), Type.Literal("completed")], {
-		description: "Status of this todo item.",
+		description:
+			"Status of this todo item. Transitions: pending → in_progress → completed. Never go backwards (completed → in_progress). At most one item in_progress at a time.",
 	}),
 });
 

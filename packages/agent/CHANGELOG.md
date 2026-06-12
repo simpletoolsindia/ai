@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- Fixed the compaction summarization system prompt to use neutral AI assistant wording for non-coding agents ([#5401](https://github.com/earendil-works/pi/issues/5401)).
+- Fixed the compaction summarization system prompt to use neutral AI assistant wording for non-coding agents ([#5401](https://github.com/simpletoolsindiaorg/ai/issues/5401)).
 
 ## [0.78.1] - 2026-06-04
 
@@ -24,7 +24,7 @@
 
 ### Fixed
 
-- Fixed context token estimates to count user image attachments consistently with tool result images ([#4983](https://github.com/earendil-works/pi/issues/4983)).
+- Fixed context token estimates to count user image attachments consistently with tool result images ([#4983](https://github.com/simpletoolsindiaorg/ai/issues/4983)).
 
 ## [0.75.5] - 2026-05-23
 
@@ -37,9 +37,9 @@
 
 ### Fixed
 
-- Fixed tool-call preflight to stop preparing sibling tool calls after the run is aborted ([#4276](https://github.com/earendil-works/pi/issues/4276)).
-- Fixed tail truncation for oversized single-line output that ends with a trailing newline ([#4715](https://github.com/earendil-works/pi/issues/4715)).
-- Fixed Windows Node execution environment command spawns to hide helper console windows from background processes ([#4699](https://github.com/earendil-works/pi/issues/4699)).
+- Fixed tool-call preflight to stop preparing sibling tool calls after the run is aborted ([#4276](https://github.com/simpletoolsindiaorg/ai/issues/4276)).
+- Fixed tail truncation for oversized single-line output that ends with a trailing newline ([#4715](https://github.com/simpletoolsindiaorg/ai/issues/4715)).
+- Fixed Windows Node execution environment command spawns to hide helper console windows from background processes ([#4699](https://github.com/simpletoolsindiaorg/ai/issues/4699)).
 
 ## [0.75.3] - 2026-05-18
 

@@ -2,6 +2,13 @@
  * Tests for the verification loop feature.
  */
 
+import type {
+	AssistantMessage,
+	Message,
+	TextContent,
+	ToolCall,
+	ToolResultMessage,
+} from "@simpletoolsindiaorg/ai-provider";
 import { describe, expect, it } from "vitest";
 import {
 	buildVerificationPrompt,
@@ -11,7 +18,6 @@ import {
 	extractUserRequest,
 	parseVerificationResponse,
 } from "../src/core/verification.ts";
-import type { Message, AssistantMessage, ToolResultMessage, TextContent, ToolCall } from "@simpletoolsindiaorg/ai-provider";
 
 describe("buildVerificationPrompt", () => {
 	const ctx = {
@@ -65,11 +71,7 @@ describe("parseVerificationResponse", () => {
 - Edge case not handled`;
 		const result = parseVerificationResponse(response);
 		expect(result.passed).toBe(false);
-		expect(result.issues).toEqual([
-			"Missing import in utils.ts",
-			"Test not updated",
-			"Edge case not handled",
-		]);
+		expect(result.issues).toEqual(["Missing import in utils.ts", "Test not updated", "Edge case not handled"]);
 	});
 
 	it("handles unstructured negative responses", () => {
@@ -101,7 +103,14 @@ describe("extractTextFromAssistantMessage", () => {
 			api: "openai-completions" as any,
 			provider: "" as any,
 			model: "",
-			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
 			stopReason: "end_turn",
 			timestamp: Date.now(),
 		};
@@ -116,9 +125,19 @@ describe("extractUserRequest", () => {
 			{
 				role: "assistant",
 				content: [{ type: "text", text: "Ok" }],
-				api: "openai-completions" as any, provider: "" as any, model: "",
-				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
-				stopReason: "end_turn", timestamp: 2,
+				api: "openai-completions" as any,
+				provider: "" as any,
+				model: "",
+				usage: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 0,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
+				stopReason: "end_turn",
+				timestamp: 2,
 			},
 			{ role: "user", content: "Also add a test", timestamp: 3 },
 		];
@@ -131,9 +150,19 @@ describe("extractUserRequest", () => {
 			{
 				role: "assistant",
 				content: [{ type: "text", text: "Help" }],
-				api: "openai-completions" as any, provider: "" as any, model: "",
-				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
-				stopReason: "end_turn", timestamp: 1,
+				api: "openai-completions" as any,
+				provider: "" as any,
+				model: "",
+				usage: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 0,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
+				stopReason: "end_turn",
+				timestamp: 1,
 			},
 		];
 		const result = extractUserRequest(messages);
@@ -150,9 +179,19 @@ describe("extractAssistantResponse", () => {
 					{ type: "toolCall" as const, id: "1", name: "read", arguments: { path: "foo.ts" } },
 					{ type: "text" as const, text: "I read the file." },
 				],
-				api: "openai-completions" as any, provider: "" as any, model: "",
-				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
-				stopReason: "end_turn", timestamp: 1,
+				api: "openai-completions" as any,
+				provider: "" as any,
+				model: "",
+				usage: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 0,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
+				stopReason: "end_turn",
+				timestamp: 1,
 			},
 		];
 		const result = extractAssistantResponse(messages);
@@ -167,9 +206,19 @@ describe("extractToolResults", () => {
 			{
 				role: "assistant",
 				content: [{ type: "text", text: "Checking..." }],
-				api: "openai-completions" as any, provider: "" as any, model: "",
-				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
-				stopReason: "end_turn", timestamp: 1,
+				api: "openai-completions" as any,
+				provider: "" as any,
+				model: "",
+				usage: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 0,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
+				stopReason: "end_turn",
+				timestamp: 1,
 			},
 			{
 				role: "toolResult",
@@ -199,9 +248,19 @@ describe("extractToolResults", () => {
 			{
 				role: "assistant",
 				content: [{ type: "text", text: "Done" }],
-				api: "openai-completions" as any, provider: "" as any, model: "",
-				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
-				stopReason: "end_turn", timestamp: 1,
+				api: "openai-completions" as any,
+				provider: "" as any,
+				model: "",
+				usage: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 0,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
+				stopReason: "end_turn",
+				timestamp: 1,
 			},
 			{
 				role: "toolResult",

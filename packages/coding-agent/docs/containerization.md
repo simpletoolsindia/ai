@@ -52,8 +52,8 @@ Configure Pi to use the corresponding OpenAI-compatible or Anthropic-compatible 
 
 ## Gondolin
 
-[Gondolin](https://github.com/earendil-works/gondolin) is a local Linux micro-VM.
-Use the [example extension](../examples/extensions/gondolin) when you want `pi` on the host but all built-in tools routed into the VM.
+[Gondolin](https://github.com/simpletoolsindiaorg/gondolin) is a local Linux micro-VM.
+Use the [example extension](../examples/extensions/gondolin) when you want `ai` on the host but all built-in tools routed into the VM.
 
 Setup:
 
@@ -74,7 +74,7 @@ The extension mounts the host cwd at `/workspace` in the VM and overrides `read`
 User `!` commands are routed into the VM, as well.
 File changes under `/workspace` write through to the host.
 
-Requirements: Node.js >= 23.6.0 for `@earendil-works/gondolin`, plus QEMU (requires installation through your package manager).
+Requirements: Node.js >= 23.6.0 for `@simpletoolsindiaorg/gondolin`, plus QEMU (requires installation through your package manager).
 
 ## Plain Docker
 

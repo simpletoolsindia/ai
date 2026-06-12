@@ -23,7 +23,12 @@ import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, type TruncationResult
 
 const bashSchema = Type.Object({
 	command: Type.String({ description: "Bash command to execute" }),
-	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (optional, no default timeout)" })),
+	timeout: Type.Optional(
+		Type.Number({
+			description:
+				"Timeout in seconds. Use for: network requests (30s), builds (300s), tests (120s). Omit for quick commands.",
+		}),
+	),
 });
 
 export type BashToolInput = Static<typeof bashSchema>;

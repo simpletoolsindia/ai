@@ -10,14 +10,14 @@
  * License: MIT (see THIRD-PARTY/LICENSE)
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../../src/core/extensions/built-in/hermes-memory/config.js";
-import { MemoryStore } from "../../src/core/extensions/built-in/hermes-memory/store/memory-store.js";
-import { DatabaseManager } from "../../src/core/extensions/built-in/hermes-memory/store/db.js";
 import { AGENT_ROOT } from "../../src/core/extensions/built-in/hermes-memory/paths.js";
+import { DatabaseManager } from "../../src/core/extensions/built-in/hermes-memory/store/db.js";
+import { MemoryStore } from "../../src/core/extensions/built-in/hermes-memory/store/memory-store.js";
 
 const TEST_DIR = join(tmpdir(), `hermes-memory-test-${process.pid}-${Date.now()}`);
 
@@ -156,9 +156,7 @@ describe("DatabaseManager (SQLite FTS5)", () => {
 		expect(result.c).toBeGreaterThan(0);
 
 		// FTS5 is available (better-sqlite3 ships with FTS5 by default)
-		const ftsCheck = db.prepare(
-			"SELECT count(*) as c FROM sqlite_master WHERE type='table' AND name LIKE '%fts%'",
-		);
+		const ftsCheck = db.prepare("SELECT count(*) as c FROM sqlite_master WHERE type='table' AND name LIKE '%fts%'");
 		const ftsResult = ftsCheck.get() as { c: number };
 		expect(ftsResult.c).toBeGreaterThan(0);
 

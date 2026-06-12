@@ -1,0 +1,426 @@
+name: Deploy
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to deploy (e.g., v0.86.0)'
+        required: true
+        type: string
+      source_ref:
+        description: 'Source ref to build/publish (defaults to tag)'
+        required: false
+        type: string
+      publish_npm:
+        description: 'Publish npm packages'
+        required: false
+        type: boolean
+        default: true
+      build_binaries:
+        description: 'Build binaries'
+        required: false
+        type: boolean
+        default: true
+
+permissions: {}
+
+jobs:
+  # ============================================================================
+  # Quality Checks
+  # ============================================================================
+  quality:
+    name: Quality Checks
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      SOURCE_REF: ${{ github.event.inputs.source_ref || github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REF }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev fd-find ripgrep
+          sudo ln -s $(which fdfind) /usr/local/bin/fd
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Supply chain check
+        run: npm run check:supply-chain
+
+  # ============================================================================
+  # Build & Test
+  # ============================================================================
+  build-test:
+    name: Build & Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: quality
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+      fail-fast: false
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      SOURCE_REF: ${{ github.event.inputs.source_ref || github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REF }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev fd-find ripgrep
+          sudo ln -s $(which fdfind) /usr/local/bin/fd
+
+      - name: Install macOS system dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install fd ripgrep
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.os }}
+          path: |
+            packages/*/dist
+            !packages/*/dist/**/*.map
+          retention-days: 1
+
+  # ============================================================================
+  # Security Audit
+  # ============================================================================
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    needs: quality
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      SOURCE_REF: ${{ github.event.inputs.source_ref || github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REF }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: npm audit
+        run: npm audit --omit=dev
+        continue-on-error: true
+
+      - name: Check pinned deps
+        run: node scripts/check-pinned-deps.mjs
+
+  # ============================================================================
+  # Build Binaries
+  # ============================================================================
+  build-binaries:
+    name: Build Binaries
+    runs-on: ${{ matrix.os }}
+    needs: [build-test, security]
+    if: ${{ github.event.inputs.build_binaries != 'false' }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin-arm64
+            artifact: ai-darwin-arm64
+          - os: macos-latest
+            platform: darwin-x64
+            artifact: ai-darwin-x64
+          - os: ubuntu-latest
+            platform: linux-x64
+            artifact: ai-linux-x64
+          - os: ubuntu-latest
+            platform: linux-arm64
+            artifact: ai-linux-arm64
+      fail-fast: false
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      SOURCE_REF: ${{ github.event.inputs.source_ref || github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REF }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev fd-find ripgrep
+          sudo ln -s $(which fdfind) /usr/local/bin/fd
+
+      - name: Install macOS system dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install fd ripgrep
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build
+        run: npm run build
+
+      - name: Build binary for ${{ matrix.platform }}
+        run: ./scripts/build-binaries.sh --platform ${{ matrix.platform }}
+
+      - name: Rename artifacts
+        run: |
+          cd packages/coding-agent/binaries
+          for f in pi-*; do
+            [ -e "$f" ] || continue
+            new_name="ai-${f#pi-}"
+            mv "$f" "$new_name"
+          done
+          ls -la
+
+      - name: Generate checksums
+        run: |
+          cd packages/coding-agent/binaries
+          shasum -a 256 ai-*.tar.gz > checksums-${{ matrix.platform }}.sha256
+          cat checksums-${{ matrix.platform }}.sha256
+
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.platform }}
+          path: |
+            packages/coding-agent/binaries/ai-*.tar.gz
+            packages/coding-agent/binaries/checksums-*.sha256
+          retention-days: 1
+
+  # ============================================================================
+  # Create GitHub Release
+  # ============================================================================
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: build-binaries
+    if: ${{ github.event.inputs.build_binaries != 'false' }}
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      SOURCE_REF: ${{ github.event.inputs.source_ref || github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REF }}
+          persist-credentials: false
+
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: binary-*
+
+      - name: Extract changelog
+        id: changelog
+        run: |
+          VERSION="${RELEASE_TAG}"
+          VERSION="${VERSION#v}"
+          
+          cd packages/coding-agent
+          awk "/^## \[${VERSION}\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md > /tmp/release-notes.md
+          
+          if [ ! -s /tmp/release-notes.md ]; then
+            echo "Release ${VERSION}" > /tmp/release-notes.md
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd artifacts
+          
+          # Collect all release assets
+          ASSETS=""
+          for dir in binary-*/; do
+            for file in "$dir"*.tar.gz "$dir"*.sha256; do
+              [ -f "$file" ] && ASSETS="$ASSETS $file"
+            done
+          done
+          
+          # Create release
+          gh release create "${RELEASE_TAG}" \
+            --title "${RELEASE_TAG}" \
+            --notes-file /tmp/release-notes.md \
+            $ASSETS \
+            2>/dev/null || \
+          gh release upload "${RELEASE_TAG}" \
+            $ASSETS \
+            --clobber
+
+  # ============================================================================
+  # Publish npm Packages
+  # ============================================================================
+  publish-npm:
+    name: Publish npm Packages
+    runs-on: ubuntu-latest
+    needs: [build-test, security]
+    if: ${{ github.event.inputs.publish_npm != 'false' }}
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      SOURCE_REF: ${{ github.event.inputs.source_ref || github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REF }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev fd-find ripgrep
+          sudo ln -s $(which fdfind) /usr/local/bin/fd
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build
+        run: npm run build
+
+      - name: Check
+        run: npm run check
+
+      - name: Test
+        run: npm test
+
+      - name: Verify clean working tree
+        run: git diff --exit-code
+
+      - name: Upgrade npm for trusted publishing
+        run: |
+          npm install -g npm@latest --ignore-scripts
+          npm --version
+
+      - name: Publish npm packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node scripts/publish.mjs
+
+  # ============================================================================
+  # Update Documentation
+  # ============================================================================
+  update-docs:
+    name: Update Documentation
+    runs-on: ubuntu-latest
+    needs: release
+    if: ${{ github.event.inputs.build_binaries != 'false' }}
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      SOURCE_REF: ${{ github.event.inputs.source_ref || github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REF }}
+          persist-credentials: false
+
+      - name: Update README with new version
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          sed -i "s/ai@[0-9]*\.[0-9]*\.[0-9]*/ai@${VERSION}/g" README.md
+          sed -i "s/@simpletoolsindiaorg\/ai-coding-agent@[0-9]*\.[0-9]*\.[0-9]*/@simpletoolsindiaorg\/ai-coding-agent@${VERSION}/g" README.md
+
+      - name: Commit documentation updates
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "docs: update version references to ${RELEASE_TAG}"
+          file_pattern: README.md
+
+  # ============================================================================
+  # Notify
+  # ============================================================================
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [release, publish-npm]
+    if: always()
+    steps:
+      - name: Summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Release: ${{ needs.release.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- npm Publish: ${{ needs.publish-npm.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Tag: ${{ github.event.inputs.tag || github.ref_name }}" >> $GITHUB_STEP_SUMMARY

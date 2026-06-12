@@ -8,11 +8,11 @@
  * tools/list / tools/call flow.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { spawn } from "node:child_process";
-import { existsSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MCPStdioClient } from "../src/core/extensions/built-in/context-mode/mcp-client.ts";
 
 /**
@@ -99,7 +99,10 @@ describe("MCPStdioClient", () => {
 		await client.start();
 		const result = await client.callTool("echo", { text: "hello" });
 		expect(result.isError).toBeFalsy();
-		const text = result.content.filter((c) => c.type === "text").map((c) => (c as any).text).join("");
+		const text = result.content
+			.filter((c) => c.type === "text")
+			.map((c) => (c as any).text)
+			.join("");
 		expect(text).toContain("echo");
 		expect(text).toContain("hello");
 		await client.stop();

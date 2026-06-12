@@ -347,10 +347,7 @@ export function createEditToolDefinition(
 		promptSnippet:
 			"Make precise file edits — prefer replaceLines, never write huge oldText blocks, batch multiple edits in one call",
 		promptGuidelines: [
-			"Always read the file with `read` before editing. Use the line numbers from the read output.",
-			"Prefer `replaceLines` (startLine/endLine, 1-indexed). It is FAR more reliable than `edits[].oldText`.",
 			"Use `edits[].oldText` only when line numbers are not practical. oldText must match EXACTLY; copy-paste from the read output.",
-			"If a change covers > 30% of the file, use `write` instead of edit. A huge oldText is almost always wrong.",
 			"For multiple independent changes in the same file, batch them into one edit call with multiple `edits[]` or `replaceLines[]` entries — not multiple edit calls.",
 			"Keep each `oldText` as small as possible while still being unique. Do not pad with large unchanged regions.",
 		],

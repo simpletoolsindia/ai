@@ -19,11 +19,11 @@
  * resolve to a friendly error message rather than crashing the agent.
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomUUID } from "node:crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -294,9 +294,7 @@ export class MCPStdioClient {
 		});
 		// The "initialized" notification is fire-and-forget per the spec.
 		if (this.child?.stdin) {
-			this.child.stdin.write(
-				JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n",
-			);
+			this.child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
 		}
 	}
 

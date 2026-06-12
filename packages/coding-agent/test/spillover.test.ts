@@ -6,11 +6,11 @@
  * and the LLM is told the path. This test exercises that path.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spillToDisk, gcSpillover } from "../src/core/tools/spillover.ts";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { gcSpillover, spillToDisk } from "../src/core/tools/spillover.ts";
 
 const SPILLOVER_ROOT = join(tmpdir(), `spillover-test-${process.pid}-${Date.now()}`);
 

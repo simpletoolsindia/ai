@@ -187,8 +187,7 @@ export function fuzzyFindText(content: string, oldText: string): FuzzyMatchResul
 		const lastLine = oldLines[oldLines.length - 1].trim();
 		if (firstLine.length > 2 && lastLine.length > 2) {
 			for (let i = 0; i <= fuzzyLines.length - oldLines.length; i++) {
-				if (fuzzyLines[i].trim() === firstLine &&
-					fuzzyLines[i + oldLines.length - 1].trim() === lastLine) {
+				if (fuzzyLines[i].trim() === firstLine && fuzzyLines[i + oldLines.length - 1].trim() === lastLine) {
 					const matchedLines = fuzzyLines.slice(i, i + oldLines.length).join("\n");
 					const matchIndex = fuzzyContent.indexOf(matchedLines);
 					if (matchIndex !== -1) {

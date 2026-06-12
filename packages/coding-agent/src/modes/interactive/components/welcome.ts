@@ -68,17 +68,11 @@ function boxLine(left: string, right: string, width: number = BOX_W): string {
 }
 
 function boxBorder(width: number = BOX_W): string {
-	return defaultTheme.fg(
-		"borderMuted",
-		"┌" + "─".repeat(width - 2) + "┐",
-	);
+	return defaultTheme.fg("borderMuted", "┌" + "─".repeat(width - 2) + "┐");
 }
 
 function boxFooter(width: number = BOX_W): string {
-	return defaultTheme.fg(
-		"borderMuted",
-		"└" + "─".repeat(width - 2) + "┘",
-	);
+	return defaultTheme.fg("borderMuted", "└" + "─".repeat(width - 2) + "┘");
 }
 
 function renderLogo(version: string, accent: (s: string) => string, dim: (s: string) => string): string[] {
@@ -154,10 +148,7 @@ function todoSummary(): string {
 	const color = inProgress > 0 ? "warning" : completed === items.length ? "success" : "accent";
 	const label = `${completed}/${items.length} done`;
 	const tip = inProgress > 0 ? " · in progress" : completed === items.length ? " · all done" : "";
-	return (
-		defaultTheme.fg(color, `${bar} ${label}`) +
-		defaultTheme.fg("dim", tip)
-	);
+	return defaultTheme.fg(color, `${bar} ${label}`) + defaultTheme.fg("dim", tip);
 }
 
 export class WelcomePanel extends Container {
@@ -192,7 +183,11 @@ export class WelcomePanel extends Container {
 			),
 		);
 		this.addChild(
-			new Text(defaultTheme.fg("borderMuted", "│") + " ".repeat(BOX_W - 2) + defaultTheme.fg("borderMuted", "│"), 0, 0),
+			new Text(
+				defaultTheme.fg("borderMuted", "│") + " ".repeat(BOX_W - 2) + defaultTheme.fg("borderMuted", "│"),
+				0,
+				0,
+			),
 		);
 
 		const logoLines = renderLogo(version, accent, dim);
@@ -211,7 +206,11 @@ export class WelcomePanel extends Container {
 		const dirLabel = `${shortPath(cwd)}${gitBranch ? ` ${dim("on")} ${muted(gitBranch)}` : ""}`;
 
 		this.addChild(
-			new Text(defaultTheme.fg("borderMuted", "│") + " ".repeat(BOX_W - 2) + defaultTheme.fg("borderMuted", "│"), 0, 0),
+			new Text(
+				defaultTheme.fg("borderMuted", "│") + " ".repeat(BOX_W - 2) + defaultTheme.fg("borderMuted", "│"),
+				0,
+				0,
+			),
 		);
 		this.addChild(
 			new Text(
@@ -222,7 +221,11 @@ export class WelcomePanel extends Container {
 		);
 
 		this.addChild(
-			new Text(defaultTheme.fg("borderMuted", "│") + " ".repeat(BOX_W - 2) + defaultTheme.fg("borderMuted", "│"), 0, 0),
+			new Text(
+				defaultTheme.fg("borderMuted", "│") + " ".repeat(BOX_W - 2) + defaultTheme.fg("borderMuted", "│"),
+				0,
+				0,
+			),
 		);
 		this.addChild(
 			new Text(
@@ -232,7 +235,11 @@ export class WelcomePanel extends Container {
 			),
 		);
 		this.addChild(
-			new Text(defaultTheme.fg("borderMuted", "│") + " ".repeat(BOX_W - 2) + defaultTheme.fg("borderMuted", "│"), 0, 0),
+			new Text(
+				defaultTheme.fg("borderMuted", "│") + " ".repeat(BOX_W - 2) + defaultTheme.fg("borderMuted", "│"),
+				0,
+				0,
+			),
 		);
 
 		// Plan progress (only shows something when the todo list has items)
@@ -265,29 +272,23 @@ export class WelcomePanel extends Container {
 
 		// ── QUICK START ────────────────────────────────────────────────────
 		this.addChild(new Spacer(1));
-		this.addChild(
-			new Text(
-				`  ${defaultTheme.bold(defaultTheme.fg("accent", "Try one of these"))}`,
-				0,
-				0,
-			),
-		);
+		this.addChild(new Text(`  ${defaultTheme.bold(defaultTheme.fg("accent", "Try one of these"))}`, 0, 0));
 		const examples: ReadonlyArray<{ label: string; prompt: string }> = [
 			{
 				label: `${warning("!")} ${success("Read & refactor")}`,
-				prompt: `${dim("\"split auth.ts into a folder, one file per concern\"")}`,
+				prompt: `${dim('"split auth.ts into a folder, one file per concern"')}`,
 			},
 			{
 				label: `${warning("!")} ${success("Debug a test")}`,
-				prompt: `${dim("\"why is test_x flaky? trace the imports\"")}`,
+				prompt: `${dim('"why is test_x flaky? trace the imports"')}`,
 			},
 			{
 				label: `${warning("!")} ${success("Onboard a repo")}`,
-				prompt: `${dim("\"summarize this repo, find entry points, list TODOs\"")}`,
+				prompt: `${dim('"summarize this repo, find entry points, list TODOs"')}`,
 			},
 			{
 				label: `${warning("!")} ${success("Add a feature")}`,
-				prompt: `${dim("\"add a /stats slash command that shows token usage\"")}`,
+				prompt: `${dim('"add a /stats slash command that shows token usage"')}`,
 			},
 		];
 		for (const ex of examples) {
@@ -304,11 +305,7 @@ export class WelcomePanel extends Container {
 			),
 		);
 		this.addChild(
-			new Text(
-				`  ${dim("Press ")}${warning("Tab")}${dim(" when ready to start applying the plan.")}`,
-				0,
-				0,
-			),
+			new Text(`  ${dim("Press ")}${warning("Tab")}${dim(" when ready to start applying the plan.")}`, 0, 0),
 		);
 		this.addChild(new Spacer(1));
 	}

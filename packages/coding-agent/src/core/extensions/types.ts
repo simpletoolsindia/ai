@@ -714,7 +714,7 @@ export interface ToolExecutionStartEvent {
 	type: "tool_execution_start";
 	toolCallId: string;
 	toolName: string;
-	args: any;
+	args: Record<string, unknown>;
 }
 
 /** Fired during tool execution with partial/streaming output */
@@ -722,8 +722,8 @@ export interface ToolExecutionUpdateEvent {
 	type: "tool_execution_update";
 	toolCallId: string;
 	toolName: string;
-	args: any;
-	partialResult: any;
+	args: Record<string, unknown>;
+	partialResult: unknown;
 }
 
 /** Fired when a tool finishes executing */
@@ -731,7 +731,7 @@ export interface ToolExecutionEndEvent {
 	type: "tool_execution_end";
 	toolCallId: string;
 	toolName: string;
-	result: any;
+	result: unknown;
 	isError: boolean;
 }
 

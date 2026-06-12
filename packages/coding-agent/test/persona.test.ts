@@ -9,15 +9,11 @@
  *  - isReady() triggers after enough observations
  */
 
-import { describe, expect, it, beforeEach } from "vitest";
-import {
-	PersonaStore,
-	getPersonaStore,
-	type TurnObservation,
-} from "../src/core/persona.ts";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { beforeEach, describe, expect, it } from "vitest";
 import { getAgentDir } from "../src/config.ts";
+import { getPersonaStore, PersonaStore, type TurnObservation } from "../src/core/persona.ts";
 
 // Use a temp agent dir for testing
 const TEST_AGENT_DIR = join(getAgentDir(), "test-persona");
@@ -27,7 +23,9 @@ describe("PersonaStore", () => {
 
 	beforeEach(() => {
 		// Clean up test data
-		try { rmSync(TEST_AGENT_DIR, { recursive: true }); } catch {}
+		try {
+			rmSync(TEST_AGENT_DIR, { recursive: true });
+		} catch {}
 		store = new PersonaStore();
 	});
 

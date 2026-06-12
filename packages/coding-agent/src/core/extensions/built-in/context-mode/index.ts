@@ -28,10 +28,10 @@
  * server's own internal lifecycle (FTS5 indexing, etc.) still runs.
  */
 
-import type { ExtensionAPI } from "@simpletoolsindiaorg/ai-coding-agent";
-import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
+import { join } from "node:path";
+import type { ExtensionAPI } from "@simpletoolsindiaorg/ai-coding-agent";
 import { MCPStdioClient, type MCPToolDefinition } from "./mcp-client.ts";
 
 const SETTINGS_KEY = "contextMode";
@@ -110,9 +110,7 @@ export default function (pi: ExtensionAPI) {
 		client = new MCPStdioClient({ timeoutMs: settings.timeoutMs });
 		if (!client.isAvailable()) {
 			bootstrapError = `context-mode bundle not found`;
-			process.stderr.write(
-				`[context-mode] ${bootstrapError}. The ctx_* tools will not be available.\n`,
-			);
+			process.stderr.write(`[context-mode] ${bootstrapError}. The ctx_* tools will not be available.\n`);
 			return [];
 		}
 		try {
@@ -197,7 +195,7 @@ export default function (pi: ExtensionAPI) {
 						displayText =
 							text.slice(0, settings.maxOutputBytes) +
 							`\n\n[Output truncated at ${settings.maxOutputBytes} bytes of ${text.length}. ` +
-								`Use ctx_search / ctx_batch_execute to query specific slices.]`;
+							`Use ctx_search / ctx_batch_execute to query specific slices.]`;
 					}
 					return {
 						content: [{ type: "text", text: displayText }],

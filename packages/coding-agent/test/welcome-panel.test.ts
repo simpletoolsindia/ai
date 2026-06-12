@@ -12,8 +12,8 @@
  *  - Source-level: the panel is wired into interactive-mode
  */
 
-import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
 
 describe("WelcomePanel (source-level smoke tests)", () => {
 	const source = readFileSync(

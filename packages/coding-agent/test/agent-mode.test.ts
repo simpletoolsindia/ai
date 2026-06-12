@@ -13,15 +13,15 @@
  * exercised manually.
  */
 
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
-import { buildSystemPrompt } from "../src/core/system-prompt.ts";
 import { ModelRegistry } from "../src/core/model-registry.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
+import { buildSystemPrompt } from "../src/core/system-prompt.ts";
 
 const TEST_DIR = mkdtempSync(join(tmpdir(), "ai-mode-test-"));
 
@@ -109,10 +109,7 @@ describe("buildSystemPrompt: mode integration", () => {
 describe("agent mode: /mode slash command (source-level smoke test)", () => {
 	it("is registered in BUILTIN_SLASH_COMMANDS", async () => {
 		const fs = await import("node:fs");
-		const src = fs.readFileSync(
-			"/Users/sridhar/ai/packages/coding-agent/src/core/slash-commands.ts",
-			"utf-8",
-		);
+		const src = fs.readFileSync("/Users/sridhar/ai/packages/coding-agent/src/core/slash-commands.ts", "utf-8");
 		expect(src).toMatch(/name:\s*"mode"[\s\S]*?Switch the agent between PLAN[\s\S]*?EXECUTE/);
 	});
 
@@ -135,7 +132,7 @@ describe("agent mode: /mode slash command (source-level smoke test)", () => {
 		);
 		// Footer reads the mode from the session and shows the badge.
 		expect(src).toContain("this.session.getMode()");
-		expect(src).toContain("theme.fg(\"warning\", \"PLAN\")");
+		expect(src).toContain('theme.fg("warning", "PLAN")');
 	});
 });
 

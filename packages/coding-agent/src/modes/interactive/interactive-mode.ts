@@ -134,6 +134,8 @@ import { TrustSelectorComponent } from "./components/trust-selector.ts";
 import { UserMessageComponent } from "./components/user-message.ts";
 import { UserMessageSelectorComponent } from "./components/user-message-selector.ts";
 import { type WelcomeInputs, WelcomePanel } from "./components/welcome.ts";
+import { KeybindingManager } from "./keybinding-manager.ts";
+import { SlashCommandHandler } from "./slash-command-handler.ts";
 import {
 	getAvailableThemes,
 	getAvailableThemesWithPaths,
@@ -288,6 +290,8 @@ export class InteractiveMode {
 	private footerDataProvider: FooterDataProvider;
 	// Stored so the same manager can be injected into custom editors, selectors, and extension UI.
 	private keybindings: KeybindingsManager;
+	private keybindingManager: KeybindingManager;
+	private slashCommandHandler: SlashCommandHandler;
 	private version: string;
 	private isInitialized = false;
 	private onInputCallback?: (text: string) => void;
@@ -449,6 +453,29 @@ export class InteractiveMode {
 		this.footerDataProvider = new FooterDataProvider(this.sessionManager.getCwd());
 		this.footer = new FooterComponent(this.session, this.footerDataProvider);
 		this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
+
+		// Initialize the keybinding manager
+		this.keybindingManager = new KeybindingManager(this.defaultEditor, this.keybindings, this.ui);
+
+		// Initialize the slash command handler
+		this.slashCommandHandler = new SlashCommandHandler(
+			this.session,
+			this.sessionManager,
+			this.settingsManager,
+			this.session.modelRegistry,
+			{
+				showModelSelector: (searchTerm) => this.showModelSelector(searchTerm),
+				showSettingsSelector: () => this.showSettingsSelector(),
+				showSessionSelector: () => this.showSessionSelector(),
+				showTreeSelector: () => this.showTreeSelector(),
+				showUserMessageSelector: () => this.showUserMessageSelector(),
+				showStatus: (msg) => this.showStatus(msg),
+				showError: (msg) => this.showError(msg),
+				showWarning: (msg) => this.showWarning(msg),
+				updateEditorBorderColor: () => this.updateEditorBorderColor(),
+				footerInvalidate: () => this.footer.invalidate(),
+			},
+		);
 
 		// Load hide thinking block setting
 		this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();
@@ -2577,9 +2604,8 @@ export class InteractiveMode {
 	// =========================================================================
 
 	private setupKeyHandlers(): void {
-		// Set up handlers on defaultEditor - they use this.editor for text access
-		// so they work correctly regardless of which editor is active
-		this.defaultEditor.onEscape = () => {
+		// Register action handlers with the keybinding manager
+		this.keybindingManager.onAction("editor.escape", () => {
 			if (this.session.isStreaming) {
 				this.restoreQueuedMessagesToEditor({ abort: true });
 			} else if (this.session.isBashRunning) {
@@ -2593,54 +2619,56 @@ export class InteractiveMode {
 				const action = this.settingsManager.getDoubleEscapeAction();
 				if (action !== "none") {
 					const now = Date.now();
-					if (now - this.lastEscapeTime < 500) {
+					if (now - this.keybindingManager.getLastEscapeTime() < 500) {
 						if (action === "tree") {
 							this.showTreeSelector();
 						} else {
 							this.showUserMessageSelector();
 						}
-						this.lastEscapeTime = 0;
+						this.keybindingManager.setLastEscapeTime(0);
 					} else {
-						this.lastEscapeTime = now;
+						this.keybindingManager.setLastEscapeTime(now);
 					}
 				}
 			}
-		};
+		});
 
-		// Register app action handlers
-		this.defaultEditor.onAction("app.clear", () => this.handleCtrlC());
-		this.defaultEditor.onCtrlD = () => this.handleCtrlD();
-		this.defaultEditor.onAction("app.suspend", () => this.handleCtrlZ());
-		this.defaultEditor.onAction("app.thinking.cycle", () => this.cycleThinkingLevel());
-		this.defaultEditor.onAction("app.model.cycleForward", () => this.cycleModel("forward"));
-		this.defaultEditor.onAction("app.model.cycleBackward", () => this.cycleModel("backward"));
+		this.keybindingManager.onAction("editor.ctrlD", () => this.handleCtrlD());
+
+		this.keybindingManager.onAction("app.clear", () => this.handleCtrlC());
+		this.keybindingManager.onAction("app.suspend", () => this.handleCtrlZ());
+		this.keybindingManager.onAction("app.thinking.cycle", () => this.cycleThinkingLevel());
+		this.keybindingManager.onAction("app.model.cycleForward", () => this.cycleModel("forward"));
+		this.keybindingManager.onAction("app.model.cycleBackward", () => this.cycleModel("backward"));
 
 		// Global debug handler on TUI (works regardless of focus)
 		this.ui.onDebug = () => this.handleDebugCommand();
-		this.defaultEditor.onAction("app.model.select", () => this.showModelSelector());
-		this.defaultEditor.onAction("app.tools.expand", () => this.toggleToolOutputExpansion());
-		this.defaultEditor.onAction("app.mode.toggle", () => this.handleModeCommand("toggle"));
-		this.defaultEditor.onAction("app.thinking.toggle", () => this.toggleThinkingBlockVisibility());
-		this.defaultEditor.onAction("app.editor.external", () => this.openExternalEditor());
-		this.defaultEditor.onAction("app.message.followUp", () => this.handleFollowUp());
-		this.defaultEditor.onAction("app.message.dequeue", () => this.handleDequeue());
-		this.defaultEditor.onAction("app.session.new", () => this.handleClearCommand());
-		this.defaultEditor.onAction("app.session.tree", () => this.showTreeSelector());
-		this.defaultEditor.onAction("app.session.fork", () => this.showUserMessageSelector());
-		this.defaultEditor.onAction("app.session.resume", () => this.showSessionSelector());
+		this.keybindingManager.onAction("app.model.select", () => this.showModelSelector());
+		this.keybindingManager.onAction("app.tools.expand", () => this.toggleToolOutputExpansion());
+		this.keybindingManager.onAction("app.mode.toggle", () => this.handleModeCommand("toggle"));
+		this.keybindingManager.onAction("app.thinking.toggle", () => this.toggleThinkingBlockVisibility());
+		this.keybindingManager.onAction("app.editor.external", () => this.openExternalEditor());
+		this.keybindingManager.onAction("app.message.followUp", () => this.handleFollowUp());
+		this.keybindingManager.onAction("app.message.dequeue", () => this.handleDequeue());
+		this.keybindingManager.onAction("app.session.new", () => this.handleClearCommand());
+		this.keybindingManager.onAction("app.session.tree", () => this.showTreeSelector());
+		this.keybindingManager.onAction("app.session.fork", () => this.showUserMessageSelector());
+		this.keybindingManager.onAction("app.session.resume", () => this.showSessionSelector());
 
-		this.defaultEditor.onChange = (text: string) => {
+		this.keybindingManager.onAction("editor.change", (text: string) => {
 			const wasBashMode = this.isBashMode;
 			this.isBashMode = text.trimStart().startsWith("!");
 			if (wasBashMode !== this.isBashMode) {
 				this.updateEditorBorderColor();
 			}
-		};
+		});
 
-		// Handle clipboard image paste (triggered on Ctrl+V)
-		this.defaultEditor.onPasteImage = () => {
+		this.keybindingManager.onAction("editor.pasteImage", () => {
 			this.handleClipboardImagePaste();
-		};
+		});
+
+		// Set up all key handlers
+		this.keybindingManager.setupKeyHandlers();
 	}
 
 	private async handleClipboardImagePaste(): Promise<void> {
@@ -2670,178 +2698,10 @@ export class InteractiveMode {
 			text = text.trim();
 			if (!text) return;
 
-			// Handle commands
-			if (text === "/settings") {
-				this.showSettingsSelector();
+			// Try to handle as a slash command
+			const handled = await this.slashCommandHandler.handleCommand(text);
+			if (handled) {
 				this.editor.setText("");
-				return;
-			}
-			if (text === "/scoped-models") {
-				this.editor.setText("");
-				await this.showModelsSelector();
-				return;
-			}
-			if (text === "/model" || text.startsWith("/model ")) {
-				const searchTerm = text.startsWith("/model ") ? text.slice(7).trim() : undefined;
-				this.editor.setText("");
-				await this.handleModelCommand(searchTerm);
-				return;
-			}
-			if (text === "/export" || text.startsWith("/export ")) {
-				await this.handleExportCommand(text);
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/import" || text.startsWith("/import ")) {
-				await this.handleImportCommand(text);
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/share") {
-				await this.handleShareCommand();
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/copy") {
-				await this.handleCopyCommand();
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/todo") {
-				this.handleTodoShowCommand();
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/clear-todo") {
-				this.handleTodoClearCommand();
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/name" || text.startsWith("/name ")) {
-				this.handleNameCommand(text);
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/session") {
-				this.handleSessionCommand();
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/changelog") {
-				this.handleChangelogCommand();
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/hotkeys") {
-				this.handleHotkeysCommand();
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/diag" || text.startsWith("/diag ")) {
-				await this.handleDiagCommand(text);
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/update" || text.startsWith("/update ")) {
-				await this.handleUpdateCommand(text);
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/reload") {
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/help") {
-				this.handleHelpCommand();
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/fork") {
-				this.showUserMessageSelector();
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/clone") {
-				this.editor.setText("");
-				await this.handleCloneCommand();
-				return;
-			}
-			if (text === "/tree") {
-				this.showTreeSelector();
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/trust") {
-				this.showTrustSelector();
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/searcheng" || text.startsWith("/searcheng ")) {
-				void this.handleSearchengCommand(text.replace(/^\/searcheng\s*/, "").trim());
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/login") {
-				this.showOAuthSelector("login");
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/logout") {
-				this.showOAuthSelector("logout");
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/new") {
-				this.editor.setText("");
-				await this.handleClearCommand();
-				return;
-			}
-			if (text === "/compact" || text.startsWith("/compact ")) {
-				const customInstructions = text.startsWith("/compact ") ? text.slice(9).trim() : undefined;
-				this.editor.setText("");
-				await this.handleCompactCommand(customInstructions);
-				return;
-			}
-			if (text === "/mode" || text.startsWith("/mode ")) {
-				const arg =
-					text === "/mode"
-						? ""
-						: text
-								.replace(/^\/mode\s*/, "")
-								.trim()
-								.toLowerCase();
-				this.editor.setText("");
-				this.handleModeCommand(arg);
-				return;
-			}
-			if (text === "/reload") {
-				this.editor.setText("");
-				await this.handleReloadCommand();
-				return;
-			}
-			if (text === "/debug") {
-				this.handleDebugCommand();
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/arminsayshi") {
-				this.handleArminSaysHi();
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/dementedelves") {
-				this.handleDementedDelves();
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/resume") {
-				this.showSessionSelector();
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/quit") {
-				this.editor.setText("");
-				await this.shutdown();
 				return;
 			}
 

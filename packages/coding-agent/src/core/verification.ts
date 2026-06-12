@@ -17,13 +17,13 @@
 import {
 	type AssistantMessage,
 	type Context,
+	completeSimple,
 	type Message,
 	type Model,
 	type TextContent,
 	type ThinkingContent,
 	type ToolCall,
 	type ToolResultMessage,
-	completeSimple,
 } from "@simpletoolsindiaorg/ai-provider";
 
 /** Result of a verification check. */

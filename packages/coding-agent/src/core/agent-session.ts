@@ -33,7 +33,6 @@ import {
 	resetApiProviders,
 	streamSimple,
 } from "@simpletoolsindiaorg/ai-provider";
-import { theme } from "../modes/interactive/theme/theme.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { sleep } from "../utils/sleep.ts";
@@ -95,6 +94,7 @@ import type { SettingsManager } from "./settings-manager.ts";
 import type { SlashCommandInfo } from "./slash-commands.ts";
 import { createSyntheticSourceInfo, type SourceInfo } from "./source-info.ts";
 import { type BuildSystemPromptOptions, buildSystemPrompt } from "./system-prompt.ts";
+import { getDefaultThemeProvider, type ThemeProvider } from "./theme-provider.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
@@ -305,9 +305,15 @@ export class AgentSession {
 		// Write to a file path
 		if (/\s>\s*[/~]/.test(c)) return "file redirect";
 		// File-modifying commands
-		if (/(?:^|\||;|&)\s*(?:dd|cp|mv|rm|touch|mkdir|chmod|chown|ln|sed\s.*-i|sed\s.*--in-place)\s/.test(c)) return "file modification";
+		if (/(?:^|\||;|&)\s*(?:dd|cp|mv|rm|touch|mkdir|chmod|chown|ln|sed\s.*-i|sed\s.*--in-place)\s/.test(c))
+			return "file modification";
 		// npm/yarn/pip etc install (can modify files)
-		if (/(?:^|\||;|&)\s*(?:npm|yarn|pnpm|pip|pip3|gem|cargo)\s+(?:install|add|remove|uninstall|update|upgrade)\b/.test(c)) return "package install";
+		if (
+			/(?:^|\||;|&)\s*(?:npm|yarn|pnpm|pip|pip3|gem|cargo)\s+(?:install|add|remove|uninstall|update|upgrade)\b/.test(
+				c,
+			)
+		)
+			return "package install";
 		return null;
 	}
 
@@ -371,14 +377,9 @@ export class AgentSession {
 		// active tool set so the model can't mutate files from the very
 		// first turn. The user has to run `/mode execute` (or press Tab)
 		// to apply edits.
-		if (
-			config.settingsManager?.getAgentMode() === "plan" &&
-			this._initialActiveToolNames
-		) {
+		if (config.settingsManager?.getAgentMode() === "plan" && this._initialActiveToolNames) {
 			const MUTATING = new Set(["write", "edit", "bash"]);
-			this._initialActiveToolNames = this._initialActiveToolNames.filter(
-				(n) => !MUTATING.has(n),
-			);
+			this._initialActiveToolNames = this._initialActiveToolNames.filter((n) => !MUTATING.has(n));
 		}
 
 		// Always subscribe to agent events for internal handling
@@ -2483,7 +2484,16 @@ export class AgentSession {
 	 * configured, this returns `undefined` and the tool falls back to
 	 * its hardcoded default URL.
 	 */
-	private buildWebsearchToolOptions(): { searchUrl: string; defaultLimit: number; defaultLanguage: string; defaultSafesearch: "0" | "1" | "2"; defaultTimeRange?: "day" | "week" | "month" | "year"; headers?: Record<string, string> } | undefined {
+	private buildWebsearchToolOptions():
+		| {
+				searchUrl: string;
+				defaultLimit: number;
+				defaultLanguage: string;
+				defaultSafesearch: "0" | "1" | "2";
+				defaultTimeRange?: "day" | "week" | "month" | "year";
+				headers?: Record<string, string>;
+		  }
+		| undefined {
 		const cfg = this._modelRegistry.getWebsearchConfig();
 		if (!cfg) return undefined;
 		return {
@@ -3149,11 +3159,12 @@ export class AgentSession {
 	 */
 	async exportToHtml(outputPath?: string): Promise<string> {
 		const themeName = this.settingsManager.getTheme();
+		const themeProvider = getDefaultThemeProvider();
 
 		// Create tool renderer if we have an extension runner (for custom tool HTML rendering)
 		const toolRenderer: ToolHtmlRenderer = createToolHtmlRenderer({
 			getToolDefinition: (name) => this.getToolDefinition(name),
-			theme,
+			theme: themeProvider,
 			cwd: this.sessionManager.getCwd(),
 		});
 

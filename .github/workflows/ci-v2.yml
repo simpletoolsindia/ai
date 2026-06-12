@@ -1,0 +1,440 @@
+# ============================================================================
+# CI/CD Pipeline v2.0
+# Comprehensive build, test, and release automation
+# ============================================================================
+
+name: CI/CD Pipeline v2
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  schedule:
+    # Daily security audit at 07:37 UTC
+    - cron: '37 7 * * *'
+
+# ============================================================================
+# Concurrency
+# ============================================================================
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# ============================================================================
+# Permissions
+# ============================================================================
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+# ============================================================================
+# Jobs
+# ============================================================================
+
+jobs:
+  # ==========================================================================
+  # Quality Gates
+  # ==========================================================================
+  quality:
+    name: Quality Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run linter
+        run: npm run check:lint
+
+      - name: Run formatter check
+        run: npm run check:format
+
+      - name: Run type checker
+        run: npm run check:types
+
+      - name: Check pinned dependencies
+        run: npm run check:pinned-deps
+
+      - name: Check TypeScript imports
+        run: npm run check:ts-imports
+
+      - name: Verify shrinkwrap
+        run: npm run check:shrinkwrap
+
+  # ==========================================================================
+  # Build & Test Matrix
+  # ==========================================================================
+  build-test:
+    name: Build & Test (${{ matrix.os }})
+    needs: quality
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, macos-14]
+        node-version: [22]
+        include:
+          - os: ubuntu-latest
+            platform: linux-x64
+          - os: macos-latest
+            platform: darwin-x64
+          - os: macos-14
+            platform: darwin-arm64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build packages
+        run: npm run build
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Run integration tests
+        run: npm run test:integration
+        continue-on-error: true
+
+      - name: Verify build artifacts
+        run: |
+          echo "Checking build artifacts..."
+          test -f packages/ai/dist/index.js
+          test -f packages/tui/dist/index.js
+          test -f packages/agent/dist/index.js
+          test -f packages/coding-agent/dist/cli.js
+          echo "All build artifacts present."
+
+      - name: Test CLI startup
+        run: |
+          node packages/coding-agent/dist/cli.js --version
+          node packages/coding-agent/dist/cli.js --help
+
+  # ==========================================================================
+  # Security Audit
+  # ==========================================================================
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run npm audit
+        run: npm audit --omit=dev --audit-level=moderate
+        continue-on-error: true
+
+      - name: Verify npm signatures
+        run: npm audit signatures
+        continue-on-error: true
+
+      - name: Check for known vulnerabilities
+        run: |
+          echo "Checking for known vulnerabilities..."
+          npm audit --omit=dev 2>&1 | tee audit-report.txt
+          if grep -q "critical" audit-report.txt; then
+            echo "::error::Critical vulnerabilities found!"
+            exit 1
+          fi
+
+  # ==========================================================================
+  # Cross-Platform Binary Builds
+  # ==========================================================================
+  build-binaries:
+    name: Build Binary (${{ matrix.platform }})
+    needs: [quality, build-test]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            runner: macos-14
+            bun_target: bun-darwin-arm64
+          - platform: darwin-x64
+            runner: macos-latest
+            bun_target: bun-darwin-x64
+          - platform: linux-x64
+            runner: ubuntu-latest
+            bun_target: bun-linux-x64
+          - platform: linux-arm64
+            runner: ubuntu-latest
+            bun_target: bun-linux-arm64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Build binary
+        run: |
+          chmod +x scripts/build-binaries.sh
+          ./scripts/build-binaries.sh --platform ${{ matrix.platform }}
+
+      - name: Verify binary
+        run: |
+          BINARY_PATH="dist/ai-${{ matrix.platform }}"
+          if [ -f "$BINARY_PATH" ]; then
+            echo "Binary built successfully: $BINARY_PATH"
+            ls -lh "$BINARY_PATH"
+
+            # Test binary (Linux only)
+            if [[ "${{ matrix.platform }}" == linux-* ]]; then
+              chmod +x "$BINARY_PATH"
+              ./"$BINARY_PATH" --version
+            fi
+          else
+            echo "::error::Binary not found at $BINARY_PATH"
+            exit 1
+          fi
+
+      - name: Generate checksum
+        run: |
+          BINARY_PATH="dist/ai-${{ matrix.platform }}"
+          shasum -a 256 "$BINARY_PATH" > "$BINARY_PATH.sha256"
+          echo "Checksum generated:"
+          cat "$BINARY_PATH.sha256"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.platform }}
+          path: |
+            dist/ai-${{ matrix.platform }}
+            dist/ai-${{ matrix.platform }}.sha256
+          retention-days: 30
+
+  # ==========================================================================
+  # npm Publishing (on tag push)
+  # ==========================================================================
+  publish-npm:
+    name: Publish to npm
+    needs: [quality, build-test, security, build-binaries]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: npm-publish
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build packages
+        run: npm run build
+
+      - name: Run full checks
+        run: npm run check
+
+      - name: Run tests
+        run: npm test
+
+      - name: Verify clean state
+        run: git diff --exit-code
+
+      - name: Publish packages
+        run: node scripts/publish.mjs
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify publication
+        run: |
+          VERSION=$(node -p "require('./packages/coding-agent/package.json').version")
+          echo "Published version: $VERSION"
+
+          # Verify packages are available
+          for pkg in ai-provider ai-tui ai-agent ai-coding-agent; do
+            echo "Checking @simpletoolsindiaorg/$pkg@$VERSION..."
+            npm view "@simpletoolsindiaorg/$pkg@$VERSION" version 2>/dev/null || echo "::warning::Package not yet available: $pkg"
+          done
+
+  # ==========================================================================
+  # GitHub Release (on tag push)
+  # ==========================================================================
+  release:
+    name: Create Release
+    needs: [quality, build-test, security, build-binaries, publish-npm]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+
+          # Copy binaries and checksums
+          for dir in artifacts/binary-*; do
+            if [ -d "$dir" ]; then
+              cp "$dir"/* release-assets/
+            fi
+          done
+
+          # Generate combined checksum file
+          cd release-assets
+          shasum -a 256 ai-* > checksums.sha256
+          cd ..
+
+          echo "Release assets:"
+          ls -lh release-assets/
+
+      - name: Extract changelog
+        id: changelog
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          CHANGELOG=$(sed -n "/## \[$VERSION\]/,/## \[/p" packages/coding-agent/CHANGELOG.md | head -n -1)
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ai ${{ github.ref_name }}
+          body: |
+            ## Installation
+
+            ### Quick Install (recommended)
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/simpletoolsindiaorg/ai/main/install.sh | bash
+            ```
+
+            ### npm
+            ```bash
+            npm install -g @simpletoolsindiaorg/ai-coding-agent
+            ```
+
+            ### Prebuilt Binary
+            Download the appropriate binary for your platform from the assets below.
+
+            ## Changes
+
+            ${{ steps.changelog.outputs.changelog }}
+
+            ## Checksums
+
+            See `checksums.sha256` for verification.
+
+            ## Documentation
+
+            - [README](https://github.com/simpletoolsindiaorg/ai#readme)
+            - [Documentation](https://simpletoolsindia.github.io/ai/)
+          files: |
+            release-assets/*
+          draft: false
+          prerelease: false
+
+  # ==========================================================================
+  # Documentation Update
+  # ==========================================================================
+  docs:
+    name: Update Documentation
+    needs: [release]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Update version in docs
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "Updating documentation for version $VERSION..."
+
+          # Update version references in documentation
+          find . -name "*.md" -type f -exec sed -i "s/v[0-9]+\.[0-9]+\.[0-9]+/v$VERSION/g" {} \; 2>/dev/null || true
+
+      - name: Commit documentation updates
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add -A
+          git diff --staged --quiet || git commit -m "docs: update version references to ${{ github.ref_name }}"
+          git push || echo "No changes to push"
+
+  # ==========================================================================
+  # Notification
+  # ==========================================================================
+  notify:
+    name: Notify Stakeholders
+    needs: [release, publish-npm]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Send notification
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "Release $VERSION completed successfully!"
+          echo ""
+          echo "Release URL: https://github.com/simpletoolsindiaorg/ai/releases/tag/v$VERSION"
+          echo "npm: https://www.npmjs.com/package/@simpletoolsindiaorg/ai-coding-agent"

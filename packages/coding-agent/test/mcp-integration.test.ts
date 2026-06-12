@@ -5,11 +5,11 @@
  * Uses the filesystem MCP server as a test companion.
  */
 
-import { describe, expect, it, beforeAll, afterAll } from "vitest";
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /** Minimal JSON-RPC client for MCP testing */
 class MCPTestClient {
@@ -74,8 +74,14 @@ class MCPTestClient {
 				reject(new Error(`Request '${method}' timed out`));
 			}, 10000);
 			this.pending.set(id, {
-				resolve: (v: unknown) => { clearTimeout(timeout); resolve(v); },
-				reject: (e: unknown) => { clearTimeout(timeout); reject(e); },
+				resolve: (v: unknown) => {
+					clearTimeout(timeout);
+					resolve(v);
+				},
+				reject: (e: unknown) => {
+					clearTimeout(timeout);
+					reject(e);
+				},
 			});
 			this.child?.stdin?.write(message + "\n");
 		});
@@ -91,8 +97,15 @@ class MCPTestClient {
 		this.pending.clear();
 		return new Promise((resolve) => {
 			child.once("exit", resolve);
-			try { child.kill("SIGTERM"); } catch {}
-			setTimeout(() => { try { child.kill("SIGKILL"); } catch {} resolve(undefined); }, 2000);
+			try {
+				child.kill("SIGTERM");
+			} catch {}
+			setTimeout(() => {
+				try {
+					child.kill("SIGKILL");
+				} catch {}
+				resolve(undefined);
+			}, 2000);
 		});
 	}
 }
@@ -139,7 +152,7 @@ describe("MCP Server Integration", () => {
 			capabilities: {},
 			clientInfo: { name: "ai-test", version: "0.79.8" },
 		});
-		const result = await client.request("tools/list") as { tools: Array<{ name: string }> };
+		const result = (await client.request("tools/list")) as { tools: Array<{ name: string }> };
 		expect(result).toBeDefined();
 		expect(result.tools).toBeInstanceOf(Array);
 		expect(result.tools.length).toBeGreaterThan(0);
@@ -156,10 +169,10 @@ describe("MCP Server Integration", () => {
 			capabilities: {},
 			clientInfo: { name: "ai-test", version: "0.79.8" },
 		});
-		const result = await client.request("tools/call", {
+		const result = (await client.request("tools/call", {
 			name: "read_file",
 			arguments: { path: "/etc/hosts" },
-		}) as { content: Array<{ type: string; text?: string }> };
+		})) as { content: Array<{ type: string; text?: string }> };
 		expect(result).toBeDefined();
 		expect(result.content).toBeInstanceOf(Array);
 		// /etc/hosts exists pretty much everywhere

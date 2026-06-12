@@ -11,10 +11,10 @@
  *  - refusing to clobber a malformed existing models.json
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRegistry } from "../src/core/model-registry.ts";
@@ -61,9 +61,7 @@ describe("ModelRegistry.addOpenAICompatibleProvider()", () => {
 			baseUrl: "https://api.groq.com/openai/v1",
 			api: "openai-completions",
 			apiKey: "gsk_test_123",
-			models: [
-				{ id: "llama-3.1-70b-versatile", name: "Llama 3.1 70B (Groq)" },
-			],
+			models: [{ id: "llama-3.1-70b-versatile", name: "Llama 3.1 70B (Groq)" }],
 		});
 
 		// auth.json written
@@ -85,9 +83,7 @@ describe("ModelRegistry.addOpenAICompatibleProvider()", () => {
 			modelId: "accounts/fireworks/models/llama-v3p1-70b-instruct",
 		});
 		const models = JSON.parse(readFileSync(modelsPath, "utf-8"));
-		expect(models.providers["my-fireworks"].models[0].name).toBe(
-			"accounts/fireworks/models/llama-v3p1-70b-instruct",
-		);
+		expect(models.providers["my-fireworks"].models[0].name).toBe("accounts/fireworks/models/llama-v3p1-70b-instruct");
 	});
 
 	it("preserves other providers when adding a new one", () => {
@@ -196,12 +192,7 @@ describe("ModelRegistry.addOpenAICompatibleProvider()", () => {
 
 	it("rejects invalid URLs", () => {
 		const { registry } = makeRegistry();
-		const cases = [
-			"not-a-url",
-			"://missing-scheme",
-			"ftp://api.example.com/v1",
-			"file:///etc/passwd",
-		];
+		const cases = ["not-a-url", "://missing-scheme", "ftp://api.example.com/v1", "file:///etc/passwd"];
 		for (const baseUrl of cases) {
 			expect(() =>
 				registry.addOpenAICompatibleProvider({

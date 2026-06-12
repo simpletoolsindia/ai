@@ -3,6 +3,7 @@
  */
 
 import { getDocsPath, getExamplesPath, getReadmePath } from "../config.ts";
+import { createDynamicSkillsLoader, formatSkillsForPromptLazy, type ScoredSkill } from "./dynamic-skills.ts";
 import { formatSkillsForPrompt, type Skill } from "./skills.ts";
 
 export interface BuildSystemPromptOptions {
@@ -29,6 +30,14 @@ export interface BuildSystemPromptOptions {
 	 * "execute". Defaults to "execute" (no extra text).
 	 */
 	mode?: "plan" | "execute";
+	/** User query for dynamic skills loading. */
+	userQuery?: string;
+	/** Whether to use dynamic skills loading. */
+	useDynamicSkills?: boolean;
+	/** Maximum number of skills to include in prompt. */
+	maxSkills?: number;
+	/** Minimum relevance score threshold (0-1). */
+	minRelevance?: number;
 }
 
 /** Build the system prompt with tools, guidelines, and context */
@@ -43,6 +52,10 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 		contextFiles: providedContextFiles,
 		skills: providedSkills,
 		mode = "execute",
+		userQuery,
+		useDynamicSkills = false,
+		maxSkills = 10,
+		minRelevance = 0.3,
 	} = options;
 	const resolvedCwd = cwd;
 	const promptCwd = resolvedCwd.replace(/\\/g, "/");
@@ -57,6 +70,18 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 
 	const contextFiles = providedContextFiles ?? [];
 	const skills = providedSkills ?? [];
+
+	// Use dynamic skills loading if enabled and user query is provided
+	let skillsToInclude: Skill[] | ScoredSkill[] = skills;
+	if (useDynamicSkills && userQuery && skills.length > 0) {
+		const loader = createDynamicSkillsLoader({
+			maxSkills,
+			minRelevance,
+		});
+		// Note: This is synchronous for now, but could be made async
+		// For now, we'll use the static skills but with dynamic formatting
+		skillsToInclude = skills;
+	}
 
 	if (customPrompt) {
 		let prompt = customPrompt;
@@ -77,8 +102,12 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 
 		// Append skills section (only if read tool is available)
 		const customPromptHasRead = !selectedTools || selectedTools.includes("read");
-		if (customPromptHasRead && skills.length > 0) {
-			prompt += formatSkillsForPrompt(skills);
+		if (customPromptHasRead && skillsToInclude.length > 0) {
+			if (useDynamicSkills) {
+				prompt += formatSkillsForPromptLazy(skillsToInclude as ScoredSkill[]);
+			} else {
+				prompt += formatSkillsForPrompt(skillsToInclude);
+			}
 		}
 
 		// Add date and working directory last
@@ -92,8 +121,60 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 	// A tool appears in Available tools only when the caller provides a one-line snippet.
 	const tools = selectedTools || ["read", "bash", "edit", "write"];
 	const visibleTools = tools.filter((name) => !!toolSnippets?.[name]);
-	const toolsList =
-		visibleTools.length > 0 ? visibleTools.map((name) => `- ${name}: ${toolSnippets![name]}`).join("\n") : "(none)";
+
+	// Categorize tools for better organization
+	const toolCategories: Record<string, string[]> = {
+		"File Operations": ["read", "write", "edit", "apply_patch", "multi_edit"],
+		Search: ["grep", "find", "ls"],
+		Execution: ["bash", "test"],
+		Delegation: ["subagent", "todo"],
+		Web: ["websearch", "webfetch"],
+	};
+
+	// Build categorized tools list
+	let toolsList = "";
+	if (visibleTools.length > 0) {
+		const categorized = new Set<string>();
+		for (const [category, categoryTools] of Object.entries(toolCategories)) {
+			const categoryVisible = visibleTools.filter((name) => categoryTools.includes(name));
+			if (categoryVisible.length > 0) {
+				toolsList += `\n[${category}]\n`;
+				for (const name of categoryVisible) {
+					const snippet = toolSnippets![name];
+					// Add concise examples for common tools
+					const examples: Record<string, string> = {
+						read: ' Example: read({ path: "src/index.ts", offset: 10, limit: 50 })',
+						edit: ' Example: edit({ path: "src/index.ts", replaceLines: [{ startLine: 5, endLine: 5, newText: "const x = 1;" }] })',
+						write: ' Example: write({ path: "src/new.ts", content: "export default {};" })',
+						bash: ' Example: bash({ command: "npm test", timeout: 120 })',
+						grep: ' Example: grep({ pattern: "TODO", glob: "*.ts", context: 2 })',
+						find: ' Example: find({ pattern: "**/*.test.ts" })',
+						ls: ' Example: ls({ path: "src" })',
+						todo: ' Example: todo({ todos: [{ content: "Fix bug", status: "in_progress" }] })',
+						test: ' Example: test({ pattern: "auth.test.ts" })',
+						apply_patch:
+							' Example: apply_patch({ path: "src/index.ts", patch: "@@ -5,3 +5,4 @@\\n-old\\n+new" })',
+						multi_edit: ' Example: multi_edit({ edits: [{ path: "src/a.ts", replaceLines: [...] }] })',
+					};
+					const example = examples[name] || "";
+					toolsList += `- ${name}: ${snippet}${example}\n`;
+					categorized.add(name);
+				}
+			}
+		}
+
+		// Add uncategorized tools
+		const uncategorized = visibleTools.filter((name) => !categorized.has(name));
+		if (uncategorized.length > 0) {
+			toolsList += `\n[Other]\n`;
+			for (const name of uncategorized) {
+				const snippet = toolSnippets![name];
+				toolsList += `- ${name}: ${snippet}\n`;
+			}
+		}
+	} else {
+		toolsList = "(none)";
+	}
 
 	// True when the `resolveDocs` tool is registered (built-in
 	// docs-resolver extension is enabled). When it is, the prompt can
@@ -129,19 +210,14 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 		}
 	}
 
-	// Always include these
-	addGuideline("Be concise.");
+	// Always include these (consolidated to avoid duplication with intro)
 	addGuideline("Show file paths clearly.");
 	addGuideline("No tool or data? Say so — never confabulate URLs, paths, or facts.");
 	addGuideline("Current/external info → use websearch/webfetch, don't guess.");
 
 	const guidelines = guidelinesList.map((g) => `- ${g}`).join("\n");
 
-	let prompt = `You are an expert coding assistant in ai. You operate in an agent loop: call tools, observe results, iterate until the task is done or you need user input. Be concise, show file paths, never fabricate URLs or facts. If you don't have the data, say so.
-
-Available tools:
-${toolsList}
-(Other custom tools may be available.)${
+	let prompt = `You are an expert coding assistant in ai. You operate in an agent loop: call tools, observe results, iterate until the task is done or you need user input.${
 		mode === "plan"
 			? `
 
@@ -156,7 +232,7 @@ Workflow:
 4. Present in 1–3 sentences: "Plan ready — press Tab (or run \`/mode execute\`) to apply."
 
 Rules:
-- Bash is read-only: ls, cat, wc, head, tail, grep, find, sort, uniq only.
+- Bash is read-only: Use ls, cat, wc, head, tail, grep, find, sort, uniq. These commands don't modify files. Never use >, >>, rm, mv, cp, touch, mkdir, sed, awk, or any command that writes to disk.
 - Never modify files in plan mode (no \`cat >\`, no heredocs, no rm/mv/cp/touch/mkdir).
 - If the user asks a follow-up, ANSWER and continue investigating.`
 			: mode === "execute"
@@ -167,6 +243,10 @@ Rules:
 Full tool set. Work through the active todo list in order. Mark \`in_progress\` when you start, \`completed\` when done. Update the list as you go.`
 				: ""
 	}
+
+Available tools:
+${toolsList}
+(Other custom tools may be available.)
 
 Tool usage:
 - **Always \`read\` a file BEFORE \`edit\`ing it.** Use the line numbers from the read output.
@@ -203,8 +283,12 @@ ${guidelines}`;
 	}
 
 	// Append skills section (only if read tool is available)
-	if (hasRead && skills.length > 0) {
-		prompt += formatSkillsForPrompt(skills);
+	if (hasRead && skillsToInclude.length > 0) {
+		if (useDynamicSkills) {
+			prompt += formatSkillsForPromptLazy(skillsToInclude as ScoredSkill[]);
+		} else {
+			prompt += formatSkillsForPrompt(skillsToInclude);
+		}
 	}
 
 	// NOTE: date and cwd are intentionally NOT appended to the system

@@ -16,7 +16,7 @@ import type { PromptTemplate } from "./prompt-templates.ts";
 import { loadPromptTemplates } from "./prompt-templates.ts";
 import { SettingsManager } from "./settings-manager.ts";
 import type { Skill } from "./skills.ts";
-import { loadSkills } from "./skills.ts";
+import { loadSkillsFromDirsAsync } from "./skills-async.ts";
 import { createSourceInfo, type SourceInfo } from "./source-info.ts";
 
 export interface ResourceExtensionPaths {
@@ -600,12 +600,15 @@ export class DefaultResourceLoader implements ResourceLoader {
 		});
 	}
 
-	private updateSkillsFromPaths(skillPaths: string[], metadataByPath?: Map<string, PathMetadata>): void {
+	private async updateSkillsFromPaths(
+		skillPaths: string[],
+		metadataByPath?: Map<string, PathMetadata>,
+	): Promise<void> {
 		let skillsResult: { skills: Skill[]; diagnostics: ResourceDiagnostic[] };
 		if (this.noSkills && skillPaths.length === 0) {
 			skillsResult = { skills: [], diagnostics: [] };
 		} else {
-			skillsResult = loadSkills({
+			skillsResult = await loadSkillsAsync({
 				cwd: this.cwd,
 				agentDir: this.agentDir,
 				skillPaths,

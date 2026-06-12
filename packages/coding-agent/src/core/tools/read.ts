@@ -19,8 +19,14 @@ import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, type TruncationResult
 
 const readSchema = Type.Object({
 	path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
-	offset: Type.Optional(Type.Number({ description: "Line number to start reading from (1-indexed)" })),
-	limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read" })),
+	offset: Type.Optional(
+		Type.Number({
+			description: "Line number to start reading from (1-indexed). Use for large files to read specific sections.",
+		}),
+	),
+	limit: Type.Optional(
+		Type.Number({ description: "Maximum number of lines to read. Use offset=50, limit=20 to read lines 50-69." }),
+	),
 });
 
 export type ReadToolInput = Static<typeof readSchema>;

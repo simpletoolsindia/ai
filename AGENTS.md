@@ -31,9 +31,9 @@ The product:
 - Auto-discovers locally-installed Ollama models when configured (no manual enumeration)
 - Has a built-in todo overlay, built-in subagent spawning, and built-in web search/fetch
 
-### License & attribution
+### License
 
-`ai` is MIT-licensed. It carries over design and code from the [pi](https://github.com/earendil-works/pi) project by Mario Zechner / earendil-works — see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for details.
+`ai` is MIT-licensed. See [LICENSE](LICENSE) for details.
 
 ### Repository at a glance
 
@@ -619,8 +619,6 @@ For stronger boundaries, containerize ai. Three patterns are documented in `pack
 
 ### 9.3 Supply-chain hardening
 
-Inherited from the upstream `pi` project, unchanged:
-
 - Direct external dependencies are pinned to exact versions in `package.json`
 - `.npmrc` sets `save-exact=true` and `min-release-age=2` (avoid same-day dep releases)
 - `package-lock.json` is the dependency ground truth
@@ -634,7 +632,7 @@ Inherited from the upstream `pi` project, unchanged:
 
 ### 9.4 Reporting vulnerabilities
 
-See [SECURITY.md](SECURITY.md). For this project: report to the maintainers. For issues that also affect the upstream `pi` project, please also report upstream — fixes should land there first when possible.
+See [SECURITY.md](SECURITY.md). For this project: report to the maintainers.
 
 ---
 

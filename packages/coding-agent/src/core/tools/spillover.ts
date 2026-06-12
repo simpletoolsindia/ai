@@ -10,9 +10,9 @@
  * suffix. Old files are garbage-collected at startup.
  */
 
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { randomBytes } from "node:crypto";
 import { getAgentDir } from "../../config.ts";
 
 const SPILLOVER_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days

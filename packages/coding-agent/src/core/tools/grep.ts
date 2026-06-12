@@ -30,7 +30,9 @@ const grepSchema = Type.Object({
 		Type.Boolean({ description: "Treat pattern as literal string instead of regex (default: false)" }),
 	),
 	context: Type.Optional(
-		Type.Number({ description: "Number of lines to show before and after each match (default: 0)" }),
+		Type.Number({
+			description: "Lines before/after each match (default: 0). Use 2-3 for code context, 0 for config files.",
+		}),
 	),
 	limit: Type.Optional(Type.Number({ description: "Maximum number of matches to return (default: 100)" })),
 });

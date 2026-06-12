@@ -57,20 +57,54 @@ It is structured as four focused packages on npm, each independently usable:
 
 ## Install
 
-The one-liner downloads, builds, links the binary, and appends the path to your shell rc:
+### Quick Install (Recommended)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/simpletoolsindia/ai/main/install.sh | bash
 ```
 
-Or from npm (no source tree, faster):
+### Package Managers
 
+**npm:**
 ```bash
 npm install -g @simpletoolsindiaorg/ai-coding-agent
-npm rebuild -g better-sqlite3
 ```
 
-Requirements: **Node 22+**, **macOS or Linux** (Windows works under WSL2). Full guide: [simpletoolsindia.github.io/ai/install](https://simpletoolsindia.github.io/ai/install).
+**Homebrew (macOS/Linux):**
+```bash
+brew tap simpletoolsindiaorg/ai
+brew install ai
+```
+
+**Windows (WinGet):**
+```powershell
+winget install simpletoolsindiaorg.ai
+```
+
+### Prebuilt Binaries
+
+Download from [GitHub Releases](https://github.com/simpletoolsindiaorg/ai/releases/latest):
+
+| Platform | Architecture | Binary |
+|----------|--------------|--------|
+| macOS | Apple Silicon (ARM64) | `ai-darwin-arm64.tar.gz` |
+| macOS | Intel (x64) | `ai-darwin-x64.tar.gz` |
+| Linux | x64 | `ai-linux-x64.tar.gz` |
+| Linux | ARM64 | `ai-linux-arm64.tar.gz` |
+
+### From Source
+
+```bash
+git clone https://github.com/simpletoolsindiaorg/ai.git
+cd ai
+npm install --ignore-scripts
+npm run build
+npm link
+```
+
+**Requirements:** Node.js 22+, macOS or Linux (Windows via WSL2).
+
+**Full guide:** [docs/deployment.md](docs/deployment.md)
 
 ## Uninstall
 
@@ -257,5 +291,3 @@ Source: [github.com/simpletoolsindia/ai](https://github.com/simpletoolsindia/ai)
 ## License
 
 MIT © 2026 simpletoolsindia. See [LICENSE](LICENSE).
-
-A fork of [pi](https://github.com/earendil-works/pi) by Mario Zechner / earendil-works. See [NOTICE.md](NOTICE.md) for the full attribution.

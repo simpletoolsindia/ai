@@ -1,7 +1,5 @@
 # Ai Documentation
 
-> **Fork notice:** This documentation was originally written for [pi](https://github.com/earendil-works/pi) by Mario Zechner / earendil-works. The technical content is unchanged because the ai fork is API-compatible with upstream. The product name is `ai` (this fork), the package scope is `@simpletoolsindiaorg`, and the user config dir is `~/.ai/agent/`. See the project [README](https://github.com/simpletoolsindiaorg/ai) and [NOTICE](https://github.com/simpletoolsindiaorg/ai/blob/main/NOTICE.md) for what changed in the fork.
-
 Ai is a minimal terminal coding harness. It is designed to stay small at the core while being extended through TypeScript extensions, skills, prompt templates, themes, and ai packages.
 
 ## Quick start

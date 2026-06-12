@@ -891,7 +891,7 @@ export class ModelRegistry {
 					throw new Error(
 						`Provider ${providerName}, model ${modelDef.id}: no "api" specified. Set at provider or model level.`,
 					);
-				}				// For built-in providers, api is optional — inherited from built-in models.
+				} // For built-in providers, api is optional — inherited from built-in models.
 
 				if (!modelDef.id) throw new Error(`Provider ${providerName}: model missing "id"`);
 				// Validate contextWindow/maxTokens only if provided (they have defaults)
@@ -1017,9 +1017,7 @@ export class ModelRegistry {
 
 		const baseUrl = options.baseUrl;
 		const providerConfig = this.providerRequestConfigs.get(provider);
-		const apiKey = providerConfig?.apiKey
-			? resolveConfigValueUncached(providerConfig.apiKey)
-			: undefined;
+		const apiKey = providerConfig?.apiKey ? resolveConfigValueUncached(providerConfig.apiKey) : undefined;
 		const headers: Record<string, string> = { Accept: "application/json" };
 		if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 
@@ -1119,14 +1117,12 @@ export class ModelRegistry {
 			typeof maxResultsRaw === "number" && maxResultsRaw >= 1 && maxResultsRaw <= 20
 				? Math.floor(maxResultsRaw)
 				: 10;
-		const language = typeof languageRaw === "string" && /^[a-z]{2}$/i.test(languageRaw) ? languageRaw.toLowerCase() : "en";
+		const language =
+			typeof languageRaw === "string" && /^[a-z]{2}$/i.test(languageRaw) ? languageRaw.toLowerCase() : "en";
 		const safesearch: "0" | "1" | "2" =
 			safesearchRaw === "0" || safesearchRaw === "1" || safesearchRaw === "2" ? safesearchRaw : "0";
 		const timeRange: WebsearchProviderConfig["timeRange"] =
-			timeRangeRaw === "day" ||
-			timeRangeRaw === "week" ||
-			timeRangeRaw === "month" ||
-			timeRangeRaw === "year"
+			timeRangeRaw === "day" || timeRangeRaw === "week" || timeRangeRaw === "month" || timeRangeRaw === "year"
 				? timeRangeRaw
 				: undefined;
 
@@ -1154,12 +1150,12 @@ export class ModelRegistry {
 		while (url.endsWith("/")) url = url.slice(0, -1);
 		// If the path is empty or just "/", append /search
 		const slash = url.indexOf("//");
-			if (slash !== -1) {
-				const afterScheme = url.indexOf("/", slash + 2);
-				if (afterScheme === -1) {
-					url = `${url}/search`;
-				}
+		if (slash !== -1) {
+			const afterScheme = url.indexOf("/", slash + 2);
+			if (afterScheme === -1) {
+				url = `${url}/search`;
 			}
+		}
 		return url;
 	}
 
@@ -1242,7 +1238,9 @@ export class ModelRegistry {
 		//  - it picks up edits to models.json that happened after refresh
 		try {
 			const content = readFileSync(this.modelsJsonPath, "utf-8");
-			const parsed = JSON.parse(stripJsonComments(content)) as { providers?: Record<string, { modelOverrides?: Record<string, ModelOverride> }> };
+			const parsed = JSON.parse(stripJsonComments(content)) as {
+				providers?: Record<string, { modelOverrides?: Record<string, ModelOverride> }>;
+			};
 			const providerConfig = parsed.providers?.[provider];
 			const overrides = providerConfig?.modelOverrides;
 			if (!overrides) return undefined;
@@ -1251,7 +1249,6 @@ export class ModelRegistry {
 			return undefined;
 		}
 	}
-
 
 	/**
 	 * Find a model by provider and ID.

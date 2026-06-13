@@ -81,7 +81,7 @@ import { type AppKeybinding, KeybindingsManager } from "../../core/keybindings.t
 import { createCompactionSummaryMessage } from "../../core/messages.ts";
 import { defaultModelPerProvider, findExactModelReferenceMatch, resolveModelScope } from "../../core/model-resolver.ts";
 import { DefaultPackageManager } from "../../core/package-manager.ts";
-import { getPersonaStore, type TurnObservation } from "../../core/persona.ts";
+import { getPersonaStore } from "../../core/persona.ts";
 import { BUILT_IN_PROVIDER_DISPLAY_NAMES } from "../../core/provider-display-names.ts";
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
 import { formatMissingSessionCwdPrompt, MissingSessionCwdError } from "../../core/session-cwd.ts";
@@ -640,9 +640,7 @@ export class InteractiveMode {
 		const text = extractToolErrorText(event);
 		const truncated = text.length > MAX_PREVIEW ? `${text.slice(0, MAX_PREVIEW)}\u2026` : text;
 		const toolName = "toolName" in event ? (event as { toolName: string }).toolName : "tool";
-		const summary = truncated
-			? `\u26a0\ufe0f ${toolName}: ${truncated}`
-			: `\u26a0\ufe0f ${toolName} failed`;
+		const summary = truncated ? `\u26a0\ufe0f ${toolName}: ${truncated}` : `\u26a0\ufe0f ${toolName} failed`;
 		return {
 			content: [{ type: "text" as const, text: summary }],
 			details: (event as { result?: { details?: unknown } }).result?.details,
@@ -1150,7 +1148,7 @@ export class InteractiveMode {
 		allPaths: Array<{ path: string; segments: string[] }>,
 	): string {
 		// Built-in (inline) extensions: replace the synthetic <inline:N>
-		// path with a friendly name. The order matches BUILT_IN_EXTENSION_FACTORIES
+		// path with a friendly name. The order matches BUILT_IN_EXTENSION_IDS
 		// in src/core/built-in-extensions.ts. If we add more built-ins, update
 		// this map.
 		if (resourcePath.startsWith("<inline:")) {
@@ -1921,11 +1919,6 @@ export class InteractiveMode {
 		if (this.loadingAnimation) {
 			this.loadingAnimation.setMessage(`${this.dynamicWorkingMessage} (${keyText("app.interrupt")} to interrupt)`);
 		}
-	}
-
-	/** Clear the dynamic override and fall back to the default message. */
-	private clearDynamicWorkingMessage(): void {
-		this.dynamicWorkingMessage = undefined;
 	}
 
 	private createWorkingLoader(): Loader {
@@ -6070,7 +6063,7 @@ export class InteractiveMode {
 			providers.websearch = updatedWebsearch;
 			existing.providers = providers;
 			mkdirSync(this.runtimeHost.services.agentDir, { recursive: true });
-			writeFileSync(modelsPath, JSON.stringify(existing, null, 2) + "\n", "utf-8");
+			writeFileSync(modelsPath, `${JSON.stringify(existing, null, 2)}\n`, "utf-8");
 
 			// Best-effort type narrowing for the resolved config
 			const maxResultsRaw = updatedWebsearch.maxResults;
@@ -6221,7 +6214,7 @@ export class InteractiveMode {
 		const settingsPath = path.join(agentDir, "settings.json");
 		const model = this.session.model;
 		const modelLabel = model
-			? `${model.provider}/${model.id}` + (model.baseUrl ? ` (${model.baseUrl})` : "")
+			? `${model.provider}/${model.id}${model.baseUrl ? ` (${model.baseUrl})` : ""}`
 			: "none selected";
 		const providers = this.session.modelRegistry.getAvailable().map((m) => `${m.provider}/${m.id}`);
 		const lines = [
@@ -6366,7 +6359,9 @@ export class InteractiveMode {
 				let stdout = "";
 				let resolved = false;
 				const child = spawn(cmd, { shell: true });
-				child.stdout?.on("data", (chunk) => (stdout += chunk.toString()));
+				child.stdout?.on("data", (chunk) => {
+					stdout += chunk.toString();
+				});
 				child.on("close", () => {
 					if (!resolved) {
 						resolved = true;
@@ -6945,7 +6940,7 @@ export class InteractiveMode {
 			if (g.items.length === 0) continue;
 			lines.push(theme.bold(theme.fg("muted", g.title)));
 			for (const c of g.items) {
-				lines.push(`  ${theme.fg("accent", "/" + c.name.padEnd(14))} ${c.description}`);
+				lines.push(`  ${theme.fg("accent", `/${c.name.padEnd(14)}`)} ${c.description}`);
 			}
 			lines.push("");
 		}

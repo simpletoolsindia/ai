@@ -23,7 +23,7 @@ import {
 } from "./core/agent-session-services.ts";
 import { formatNoModelsAvailableMessage } from "./core/auth-guidance.ts";
 import { AuthStorage } from "./core/auth-storage.ts";
-import { BUILT_IN_EXTENSION_FACTORIES } from "./core/built-in-extensions.ts";
+import { loadAllBuiltInExtensions } from "./core/built-in-extensions.ts";
 import { exportFromFile } from "./core/export-html/index.ts";
 import { emitProjectTrustEvent } from "./core/extensions/runner.ts";
 import type { ExtensionFactory, LoadExtensionsResult, ProjectTrustContext } from "./core/extensions/types.ts";
@@ -700,8 +700,11 @@ export async function main(args: string[], options?: MainOptions) {
 	// Built-in extensions are always loaded unless the user explicitly
 	// passes --no-extensions. User-supplied factories (via options) come
 	// after, so they can observe or extend the built-ins' registrations.
+	// Built-ins are dynamically imported (see `loadAllBuiltInExtensions`)
+	// so the agent-startup cost is constant regardless of how many
+	// built-ins exist.
 	const allExtensionFactories: ExtensionFactory[] = [
-		...BUILT_IN_EXTENSION_FACTORIES,
+		...(await loadAllBuiltInExtensions()),
 		...(options?.extensionFactories ?? []),
 	];
 

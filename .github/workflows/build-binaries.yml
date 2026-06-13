@@ -47,14 +47,15 @@ jobs:
         # Build for macOS and Linux only (skip Windows for now).
         # Invoke once per platform so the script writes to the right output dir.
         # The script outputs files named `pi-*`; rename to `ai-*` for the fork.
+        # Call build-binaries.sh ONCE without --platform so all 4 platforms
+        # are built in the same invocation. (Calling it per-platform
+        # used to wipe the output dir between calls, leaving only the
+        # last platform's tarball at rename time.)
         run: |
-          for platform in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
-            echo "==> Building for $platform"
-            ./scripts/build-binaries.sh --platform "$platform"
-          done
+          ./scripts/build-binaries.sh
           echo "==> Renaming release artifacts from pi-* to ai-*"
           cd packages/coding-agent/binaries
-          for f in pi-*; do
+          for f in pi-*.tar.gz pi-*.zip; do
             [ -e "$f" ] || continue
             new_name="ai-${f#pi-}"
             mv "$f" "$new_name"

@@ -86,6 +86,7 @@ import {
 } from "./extensions/index.ts";
 import { emitSessionShutdownEvent } from "./extensions/runner.ts";
 import type { BashExecutionMessage, CustomMessage } from "./messages.ts";
+import { planModeBlockReason } from "./mode/plan-bash.ts";
 import type { ModelRegistry } from "./model-registry.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
@@ -293,22 +294,17 @@ export class AgentSession {
 	private _bashAbortController: AbortController | undefined = undefined;
 
 	/**
-	 * Check if a bash command would modify files. Returns the reason
-	 * string if destructive, or null if safe to run in PLAN mode.
+	 * Check if a bash command is safe to run in PLAN mode. Returns the
+	 * reason string if the command is destructive / not in the allow-list,
+	 * or null if the command is safe.
+	 *
+	 * Delegates to the default-deny allow-list in `core/mode/plan-bash.ts`.
+	 * The allow/deny patterns are exported as `PLAN_MODE_SAFE_PATTERNS` and
+	 * `PLAN_MODE_DESTRUCTIVE_PATTERNS` for testing and for the system
+	 * prompt to surface the same set of safe commands to the LLM.
 	 */
 	private _isDestructiveBashCommand(command: string): string | null {
-		const c = command.trim();
-		// Heredoc that writes to a file: cat > file << EOF
-		if (/cat\s+>\s*\S+\s*<</.test(c)) return "heredoc file write";
-		// Output redirection: cat/echo/printf > file or >> file
-		if (/(?:^|\||;|&)\s*(?:cat|echo|printf|tee)\s.*[>]/.test(c)) return "output redirection";
-		// Write to a file path
-		if (/\s>\s*[/~]/.test(c)) return "file redirect";
-		// File-modifying commands
-		if (/(?:^|\||;|&)\s*(?:dd|cp|mv|rm|touch|mkdir|chmod|chown|ln|sed\s.*-i|sed\s.*--in-place)\s/.test(c)) return "file modification";
-		// npm/yarn/pip etc install (can modify files)
-		if (/(?:^|\||;|&)\s*(?:npm|yarn|pnpm|pip|pip3|gem|cargo)\s+(?:install|add|remove|uninstall|update|upgrade)\b/.test(c)) return "package install";
-		return null;
+		return planModeBlockReason(command);
 	}
 
 	// Bash execution state
@@ -371,14 +367,9 @@ export class AgentSession {
 		// active tool set so the model can't mutate files from the very
 		// first turn. The user has to run `/mode execute` (or press Tab)
 		// to apply edits.
-		if (
-			config.settingsManager?.getAgentMode() === "plan" &&
-			this._initialActiveToolNames
-		) {
+		if (config.settingsManager?.getAgentMode() === "plan" && this._initialActiveToolNames) {
 			const MUTATING = new Set(["write", "edit", "bash"]);
-			this._initialActiveToolNames = this._initialActiveToolNames.filter(
-				(n) => !MUTATING.has(n),
-			);
+			this._initialActiveToolNames = this._initialActiveToolNames.filter((n) => !MUTATING.has(n));
 		}
 
 		// Always subscribe to agent events for internal handling
@@ -2483,7 +2474,16 @@ export class AgentSession {
 	 * configured, this returns `undefined` and the tool falls back to
 	 * its hardcoded default URL.
 	 */
-	private buildWebsearchToolOptions(): { searchUrl: string; defaultLimit: number; defaultLanguage: string; defaultSafesearch: "0" | "1" | "2"; defaultTimeRange?: "day" | "week" | "month" | "year"; headers?: Record<string, string> } | undefined {
+	private buildWebsearchToolOptions():
+		| {
+				searchUrl: string;
+				defaultLimit: number;
+				defaultLanguage: string;
+				defaultSafesearch: "0" | "1" | "2";
+				defaultTimeRange?: "day" | "week" | "month" | "year";
+				headers?: Record<string, string>;
+		  }
+		| undefined {
 		const cfg = this._modelRegistry.getWebsearchConfig();
 		if (!cfg) return undefined;
 		return {

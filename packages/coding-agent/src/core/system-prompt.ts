@@ -2,7 +2,6 @@
  * System prompt construction and project context loading
  */
 
-import { getDocsPath, getExamplesPath, getReadmePath } from "../config.ts";
 import { formatSkillsForPrompt, type Skill } from "./skills.ts";
 
 export interface BuildSystemPromptOptions {
@@ -152,7 +151,7 @@ ${toolsList}
 
 ⚠️  PLAN MODE  ⚠️
 
-Read-only mode. write, edit, and destructive bash are DISABLED. Your job is to investigate, plan, and present.
+Read-only mode. \`write\` and \`edit\` are DISABLED. Bash is available for read-only commands only — destructive commands are rejected at execution time. Your job is to investigate, plan, and present.
 
 Workflow:
 1. Investigate with read, grep, find, websearch, webfetch, bash (read-only commands only).
@@ -161,10 +160,11 @@ Workflow:
 4. Present in 1–3 sentences: "Plan ready — press Tab (or run \`/mode execute\`) to apply."
 
 Rules:
-- Bash is read-only: ls, cat, wc, head, tail, grep, find, sort, uniq only.
+- Bash is read-only: file readers (\`cat\`, \`head\`, \`tail\`, \`less\`, \`more\`, \`wc\`, \`sort\`, \`uniq\`, \`diff\`, \`file\`, \`stat\`), search (\`grep\`, \`rg\`, \`find\`, \`fd\`, \`ls\`, \`tree\`, \`eza\`, \`du\`), shell builtins (\`pwd\`, \`echo\`, \`printf\`, \`env\`), system info (\`uname\`, \`whoami\`, \`id\`, \`date\`, \`ps\`, \`df\`, \`free\`, \`top\`), VCS reads (\`git status/log/diff/show/branch/remote/ls-files\`), package reads (\`npm list/outdated/audit\`, \`yarn list/info/audit\`), and network reads (\`curl\`, \`wget\`).
+- Bash is BLOCKED for: file ops (\`rm\`, \`mv\`, \`cp\`, \`mkdir\`, \`touch\`, \`chmod\`, \`chown\`, \`tee\`, \`truncate\`, \`dd\`, \`shred\`, redirects \`>\` / \`>>\`, heredocs writing to files), package ops (any \`install\` / \`add\` / \`remove\` / \`publish\`), VCS writes (\`git add/commit/push/pull/merge/rebase/reset/checkout/stash/clone\`), privilege escalation (\`sudo\`, \`su\`), process control (\`kill\`, \`pkill\`, \`killall\`), system control (\`reboot\`, \`shutdown\`, \`systemctl\`, \`service\`), and editors (\`vim\`, \`vi\`, \`nano\`, \`emacs\`, \`code\`, \`subl\`). Anything not on the allow-list is also blocked.
+- If a command you try is rejected, the tool result will name the rule. Switch to a read-only alternative (\`git status\` instead of \`git add\`, \`cat\` instead of \`echo > file\`).
 - NEVER use \`write\`, \`edit\`, or destructive bash in plan mode. They will be rejected.
 - If the user asks you to actually do something destructive, do NOT just plan it — call \`todo\` to outline the steps and ask the user to switch to EXECUTE mode.
-- Never modify files in plan mode (no \`cat >\`, no heredocs, no rm/mv/cp/touch/mkdir).
 - If the user asks a follow-up, ANSWER and continue investigating.`
 			: mode === "execute"
 				? `

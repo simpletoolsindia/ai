@@ -22,15 +22,25 @@ export interface ModeState {
 type Listener = (state: ModeState) => void;
 
 /**
- * Tools that mutate state (filesystem, processes). Blocked in plan mode.
+ * Tools that mutate state (filesystem, processes). Blocked in plan mode
+ * at the tool-availability level.
  *
  * Read-only tools (read, grep, find, ls, websearch, webfetch, subagent, todo)
  * are allowed in both modes. The todo tool is the primary planning tool.
+ *
+ * `bash` is NOT in this set. The LLM needs to read files via the shell
+ * (cat, ls, find, grep, etc.) during planning, so `bash` is exposed in
+ * plan mode. Per-command gating happens in `agent-session.executeBash()`
+ * via `isSafeBashCommand()` from `core/mode/plan-bash.ts` — a
+ * default-deny allow-list of read-only commands. Destructive commands
+ * are rejected at execution time with a one-line reason.
+ *
+ * `edit` and `write` are still fully blocked (file mutation, no useful
+ * plan-mode read variant).
  */
 export const MUTATING_TOOLS: ReadonlySet<string> = new Set([
-	"bash", // shell — can read OR mutate, but the distinction is hard to enforce
-	"edit", // file mutation
-	"write", // file mutation
+	"edit", // file mutation — no plan-mode read variant
+	"write", // file mutation — no plan-mode read variant
 ]);
 
 /**

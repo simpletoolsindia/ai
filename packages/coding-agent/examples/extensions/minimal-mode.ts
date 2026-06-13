@@ -17,17 +17,15 @@
  */
 
 import type { ExtensionAPI } from "@simpletoolsindiaorg/ai-coding-agent";
-import {
-	createBashTool,
-	createEditTool,
-	createFindTool,
-	createGrepTool,
-	createLsTool,
-	createReadTool,
-	createWriteTool,
-} from "@simpletoolsindiaorg/ai-coding-agent";
 import { Text } from "@simpletoolsindiaorg/ai-tui";
 import { homedir } from "os";
+import { createBashTool } from "../../src/core/tools/bash.ts";
+import { createEditTool } from "../../src/core/tools/edit.ts";
+import { createFindTool } from "../../src/core/tools/find.ts";
+import { createGrepTool } from "../../src/core/tools/grep.ts";
+import { createLsTool } from "../../src/core/tools/ls.ts";
+import { createReadTool } from "../../src/core/tools/read.ts";
+import { createWriteTool } from "../../src/core/tools/write.ts";
 
 /**
  * Shorten a path by replacing home directory with ~

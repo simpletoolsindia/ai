@@ -14,17 +14,11 @@
  */
 
 import { spawn } from "node:child_process";
-import type { ExtensionAPI } from "@simpletoolsindiaorg/ai-coding-agent";
-import {
-	type BashOperations,
-	createBashTool,
-	createEditTool,
-	createReadTool,
-	createWriteTool,
-	type EditOperations,
-	type ReadOperations,
-	type WriteOperations,
-} from "@simpletoolsindiaorg/ai-coding-agent";
+import type { BashOperations, ExtensionAPI } from "@simpletoolsindiaorg/ai-coding-agent";
+import { createBashTool } from "../../src/core/tools/bash.ts";
+import { createEditTool, type EditOperations } from "../../src/core/tools/edit.ts";
+import type { ReadOperations } from "../../src/core/tools/read.ts";
+import type { WriteOperations } from "../../src/core/tools/write.ts";
 
 function sshExec(remote: string, command: string): Promise<Buffer> {
 	return new Promise((resolve, reject) => {
@@ -111,12 +105,12 @@ function createRemoteBashOps(remote: string, remoteCwd: string, localCwd: string
 	};
 }
 
-export default function (ai: ExtensionAPI) {
+export default async function (ai: ExtensionAPI) {
 	ai.registerFlag("ssh", { description: "SSH remote: user@host or user@host:/path", type: "string" });
 
 	const localCwd = process.cwd();
-	const localRead = createReadTool(localCwd);
-	const localWrite = createWriteTool(localCwd);
+	const localRead = await import("../../src/core/tools/read.ts").then((m) => m.createReadTool(localCwd));
+	const localWrite = await import("../../src/core/tools/write.ts").then((m) => m.createWriteTool(localCwd));
 	const localEdit = createEditTool(localCwd);
 	const localBash = createBashTool(localCwd);
 
@@ -130,9 +124,11 @@ export default function (ai: ExtensionAPI) {
 		async execute(id, params, signal, onUpdate, _ctx) {
 			const ssh = getSsh();
 			if (ssh) {
-				const tool = createReadTool(localCwd, {
-					operations: createRemoteReadOps(ssh.remote, ssh.remoteCwd, localCwd),
-				});
+				const tool = await import("../../src/core/tools/read.ts").then((m) =>
+					m.createReadTool(localCwd, {
+						operations: createRemoteReadOps(ssh.remote, ssh.remoteCwd, localCwd),
+					}),
+				);
 				return tool.execute(id, params, signal, onUpdate);
 			}
 			return localRead.execute(id, params, signal, onUpdate);
@@ -144,9 +140,11 @@ export default function (ai: ExtensionAPI) {
 		async execute(id, params, signal, onUpdate, _ctx) {
 			const ssh = getSsh();
 			if (ssh) {
-				const tool = createWriteTool(localCwd, {
-					operations: createRemoteWriteOps(ssh.remote, ssh.remoteCwd, localCwd),
-				});
+				const tool = await import("../../src/core/tools/write.ts").then((m) =>
+					m.createWriteTool(localCwd, {
+						operations: createRemoteWriteOps(ssh.remote, ssh.remoteCwd, localCwd),
+					}),
+				);
 				return tool.execute(id, params, signal, onUpdate);
 			}
 			return localWrite.execute(id, params, signal, onUpdate);

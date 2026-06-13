@@ -45,14 +45,14 @@ describe.skipIf(!API_KEY)("AgentSession compaction e2e", () => {
 		}
 	});
 
-	function createSession(inMemory = false) {
+	async function createSession(inMemory = false) {
 		const model = getModel("anthropic", "claude-sonnet-4-5")!;
 		const agent = new Agent({
 			getApiKey: () => API_KEY,
 			initialState: {
 				model,
 				systemPrompt: "You are a helpful assistant. Be concise.",
-				tools: createCodingTools(process.cwd()),
+				tools: await createCodingTools(process.cwd()),
 			},
 		});
 

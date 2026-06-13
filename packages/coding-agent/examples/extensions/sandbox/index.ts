@@ -46,7 +46,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { SandboxManager, type SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
 import type { ExtensionAPI } from "@simpletoolsindiaorg/ai-coding-agent";
-import { type BashOperations, createBashTool, getAgentDir } from "@simpletoolsindiaorg/ai-coding-agent";
+import { type BashOperations, getAgentDir } from "@simpletoolsindiaorg/ai-coding-agent";
+import { createBashTool } from "../../../src/core/tools/bash.ts";
 
 interface SandboxConfig extends SandboxRuntimeConfig {
 	enabled?: boolean;

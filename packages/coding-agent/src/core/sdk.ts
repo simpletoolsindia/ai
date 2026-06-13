@@ -19,22 +19,7 @@ import { DefaultResourceLoader } from "./resource-loader.ts";
 import { getDefaultSessionDir, SessionManager } from "./session-manager.ts";
 import { SettingsManager } from "./settings-manager.ts";
 import { time } from "./timings.ts";
-import {
-	createBashTool,
-	createCodingTools,
-	createEditTool,
-	createFindTool,
-	createGrepTool,
-	createLsTool,
-	createReadOnlyTools,
-	createReadTool,
-	createSubagentTool,
-	createWebfetchTool,
-	createWebsearchTool,
-	createWriteTool,
-	type ToolName,
-	withFileMutationQueue,
-} from "./tools/index.ts";
+import { createCodingTools, createReadOnlyTools, type ToolName, withFileMutationQueue } from "./tools/index.ts";
 
 export interface CreateAgentSessionOptions {
 	/** Working directory for project-local discovery. Default: process.cwd() */
@@ -118,16 +103,6 @@ export {
 	// Tool factories (for custom cwd)
 	createCodingTools,
 	createReadOnlyTools,
-	createReadTool,
-	createBashTool,
-	createEditTool,
-	createSubagentTool,
-	createWebfetchTool,
-	createWebsearchTool,
-	createWriteTool,
-	createGrepTool,
-	createFindTool,
-	createLsTool,
 };
 
 // Helper Functions
@@ -409,6 +384,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		extensionRunnerRef,
 		sessionStartEvent: options.sessionStartEvent,
 	});
+	await session.init();
 	const extensionsResult = resourceLoader.getExtensions();
 
 	return {

@@ -31,8 +31,11 @@ import type {
 	ExtensionAPI,
 	ReadToolDetails,
 } from "@simpletoolsindiaorg/ai-coding-agent";
-import { createBashTool, createEditTool, createReadTool, createWriteTool } from "@simpletoolsindiaorg/ai-coding-agent";
 import { Text } from "@simpletoolsindiaorg/ai-tui";
+import { createBashTool } from "../../src/core/tools/bash.ts";
+import { createEditTool } from "../../src/core/tools/edit.ts";
+import { createReadTool } from "../../src/core/tools/read.ts";
+import { createWriteTool } from "../../src/core/tools/write.ts";
 
 export default function (ai: ExtensionAPI) {
 	const cwd = process.cwd();

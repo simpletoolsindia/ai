@@ -377,11 +377,22 @@ export class AgentSession {
 		this._unsubscribeAgent = this.agent.subscribe(this._handleAgentEvent);
 		this._installAgentToolHooks();
 
-		this._buildRuntime({
+		// The async portion of construction is exposed as `init()` so the
+		// factory (createAgentSession) can `await` it. The constructor
+		// itself stays sync — see the AGENTS note on `class without
+		// async ctor`.
+		this._initPromise = this._buildRuntime({
 			activeToolNames: this._initialActiveToolNames,
 			includeAllExtensionTools: true,
 		});
 	}
+
+	/** Async portion of construction — called by the factory. */
+	async init(): Promise<void> {
+		await this._initPromise;
+	}
+
+	private _initPromise: Promise<void> | undefined;
 
 	/** Model registry for API key resolution and model discovery */
 	get modelRegistry(): ModelRegistry {
@@ -2496,14 +2507,17 @@ export class AgentSession {
 		};
 	}
 
-	private _buildRuntime(options: {
+	private async _buildRuntime(options: {
 		activeToolNames?: string[];
 		flagValues?: Map<string, boolean | string>;
 		includeAllExtensionTools?: boolean;
-	}): void {
+	}): Promise<void> {
 		const autoResizeImages = this.settingsManager.getImageAutoResize();
 		const shellCommandPrefix = this.settingsManager.getShellCommandPrefix();
 		const shellPath = this.settingsManager.getShellPath();
+		// createAllToolDefinitions is async (lazy-loaded tool modules);
+		// warm the module cache before wiring up the rest of the
+		// session so the LLM doesn't see the tool list appear late.
 		const baseToolDefinitions = this._baseToolsOverride
 			? Object.fromEntries(
 					Object.entries(this._baseToolsOverride).map(([name, tool]) => [
@@ -2511,7 +2525,7 @@ export class AgentSession {
 						createToolDefinitionFromAgentTool(tool),
 					]),
 				)
-			: createAllToolDefinitions(this._cwd, {
+			: await createAllToolDefinitions(this._cwd, {
 					read: { autoResizeImages },
 					bash: { commandPrefix: shellCommandPrefix, shellPath },
 					websearch: this.buildWebsearchToolOptions(),

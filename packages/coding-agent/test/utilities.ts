@@ -231,7 +231,7 @@ export function createTestResourceLoader(options: CreateTestResourceLoaderOption
  * Create an AgentSession for testing with proper setup and cleanup.
  * Use this for e2e tests that need real LLM calls.
  */
-export function createTestSession(options: TestSessionOptions = {}): TestSessionContext {
+export async function createTestSession(options: TestSessionOptions = {}): Promise<TestSessionContext> {
 	const tempDir = join(tmpdir(), `pi-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 	mkdirSync(tempDir, { recursive: true });
 
@@ -241,7 +241,7 @@ export function createTestSession(options: TestSessionOptions = {}): TestSession
 		initialState: {
 			model,
 			systemPrompt: options.systemPrompt ?? "You are a helpful assistant. Be extremely concise.",
-			tools: createCodingTools(process.cwd()),
+			tools: await createCodingTools(process.cwd()),
 		},
 	});
 

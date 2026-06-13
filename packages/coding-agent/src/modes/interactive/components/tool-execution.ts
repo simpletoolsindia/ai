@@ -9,7 +9,7 @@ import {
 	type TUI,
 } from "@simpletoolsindiaorg/ai-tui";
 import type { ToolDefinition, ToolRenderContext } from "../../../core/extensions/types.ts";
-import { createAllToolDefinitions, type ToolName } from "../../../core/tools/index.ts";
+import { createToolDefinitionSync, type ToolName } from "../../../core/tools/index.ts";
 import { getTextOutput as getRenderedTextOutput } from "../../../core/tools/render-utils.ts";
 import { convertToPng } from "../../../utils/image-convert.ts";
 import { theme } from "../theme/theme.ts";
@@ -63,7 +63,12 @@ export class ToolExecutionComponent extends Container {
 		this.toolCallId = toolCallId;
 		this.args = args;
 		this.toolDefinition = toolDefinition;
-		this.builtInToolDefinition = createAllToolDefinitions(cwd)[toolName as ToolName];
+		// createAllToolDefinitions is async (lazy-loaded modules); by the
+		// time a tool-execution component is constructed, the agent-session
+		// has already called it during init, so the module cache is warm.
+		// The sync shim throws with a clear message if that assumption
+		// ever breaks.
+		this.builtInToolDefinition = createToolDefinitionSync(toolName as ToolName, cwd);
 		this.showImages = options.showImages ?? true;
 		this.imageWidthCells = options.imageWidthCells ?? 60;
 		this.ui = ui;

@@ -26,7 +26,7 @@ import { createTestResourceLoader } from "./utilities.ts";
 
 const API_KEY = process.env.ANTHROPIC_OAUTH_TOKEN || process.env.ANTHROPIC_API_KEY;
 
-describe.skipIf(!API_KEY)("Compaction extensions", () => {
+describe.skipIf(!API_KEY)("Compaction extensions", async () => {
 	let session: AgentSession;
 	let tempDir: string;
 	let capturedEvents: SessionEvent[];
@@ -85,14 +85,14 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
 		};
 	}
 
-	function createSession(extensions: Extension[]) {
+	async function createSession(extensions: Extension[]) {
 		const model = getModel("anthropic", "claude-sonnet-4-5")!;
 		const agent = new Agent({
 			getApiKey: () => API_KEY,
 			initialState: {
 				model,
 				systemPrompt: "You are a helpful assistant. Be concise.",
-				tools: createCodingTools(process.cwd()),
+				tools: await createCodingTools(process.cwd()),
 			},
 		});
 

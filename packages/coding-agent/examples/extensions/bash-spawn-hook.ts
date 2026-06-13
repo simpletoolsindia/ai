@@ -8,16 +8,16 @@
  */
 
 import type { ExtensionAPI } from "@simpletoolsindiaorg/ai-coding-agent";
-import { createBashTool } from "@simpletoolsindiaorg/ai-coding-agent";
+import { createBashTool } from "../../src/core/tools/bash.ts";
 
 export default function (ai: ExtensionAPI) {
 	const cwd = process.cwd();
 
 	const bashTool = createBashTool(cwd, {
-		spawnHook: ({ command, cwd, env }) => ({
-			command: `source ~/.profile\n${command}`,
-			cwd,
-			env: { ...env, PI_SPAWN_HOOK: "1" },
+		spawnHook: (context) => ({
+			command: `source ~/.profile\n${context.command}`,
+			cwd: context.cwd ?? cwd,
+			env: { ...context.env, PI_SPAWN_HOOK: "1" },
 		}),
 	});
 

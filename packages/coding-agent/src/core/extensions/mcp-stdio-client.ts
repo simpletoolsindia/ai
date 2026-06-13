@@ -1,34 +1,40 @@
 /**
- * Minimal MCP stdio client for the context-mode server bundle.
+ * Generic MCP stdio client.
  *
- * Spawns the bundled `server.bundle.mjs` as a child process, performs
- * the MCP initialize handshake, calls `tools/list`, and forwards
- * `tools/call` requests to it. The result is a list of tools (with
- * JSON-Schema parameters) that the ai extension can register via
- * `pi.registerTool()`.
+ * Spawns an MCP server as a child process, performs the initialize
+ * handshake, fetches the tool list, and forwards `tools/call` requests
+ * over newline-delimited JSON-RPC 2.0.
  *
- * This is a deliberately small subset of the upstream
- * `mcp-bridge.ts` (~200 lines vs ~950). It does NOT support:
- *  - Sampling / elicitation (ai doesn't need them)
- *  - Notifications (we just don't subscribe)
- *  - Session lifecycle hooks (FTS5 indexing, resume, etc. — punted
- *    to a future version; the server still writes its DB regardless
- *    because the server's internal lifecycle handles it)
+ * Promoted from `core/extensions/built-in/context-mode/mcp-client.ts`
+ * (originally ~300 lines, hard-coded for the context-mode server). This
+ * version is parameterized by:
+ *   - `command` + `args` (default: `process.execPath` + a single server
+ *     bundle path, for backward compat with the context-mode case)
+ *   - `serverLabel` (default: "mcp-server") — used in error messages
+ *     and the stderr tag, so the same client can drive context-mode,
+ *     context7, or any future stdio MCP server
  *
- * If the server bundle is missing or fails to spawn, all operations
- * resolve to a friendly error message rather than crashing the agent.
+ * Used by:
+ *   - `core/extensions/built-in/context-mode/index.ts`  (bundled server)
+ *   - `core/extensions/built-in/context7/index.ts`        (npx wrapper)
+ *
+ * This client does NOT support:
+ *   - Sampling / elicitation (ai doesn't need them)
+ *   - Notifications (we just don't subscribe)
+ *
+ * If the server fails to spawn, all operations resolve to a friendly
+ * error message rather than crashing the agent.
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomUUID } from "node:crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const DEFAULT_SERVER_BUNDLE = join(__dirname, "mcp-server", "server.bundle.mjs");
+const DEFAULT_SERVER_BUNDLE = join(__dirname, "built-in", "context-mode", "mcp-server", "server.bundle.mjs");
 
 /** JSON-RPC request id generator. */
 let _nextId = 1;
@@ -66,21 +72,34 @@ interface PendingRequest {
 }
 
 export interface MCPStdioClientOptions {
-	/** Path to the server bundle. Defaults to ../mcp-server/server.bundle.mjs. */
+	/**
+	 * Server bundle path. Used when `command` / `args` are not provided.
+	 * Defaults to the bundled context-mode server for back-compat.
+	 */
 	serverBundlePath?: string;
+	/** Custom spawn command. If set, `serverBundlePath` is ignored. */
+	command?: string;
+	/** Custom spawn args. */
+	args?: string[];
 	/** Working dir for the spawned server. */
 	cwd?: string;
 	/** Env vars to add to the spawned server. */
 	env?: Record<string, string>;
 	/** Per-request timeout in ms (default 30000). */
 	timeoutMs?: number;
+	/**
+	 * Human-readable label for the server. Used in error messages and the
+	 * stderr tag, so logs are distinguishable when multiple MCP servers run.
+	 * Default: "mcp-server".
+	 */
+	serverLabel?: string;
 }
 
 /**
- * Spawns the bundled MCP server and exposes a minimal JSON-RPC client.
+ * Spawns an MCP server and exposes a minimal JSON-RPC client.
  *
- * The server bundle expects to be invoked as `node server.bundle.mjs`
- * and speaks newline-delimited JSON-RPC 2.0 over stdio.
+ * The server expects to be invoked and speaks newline-delimited JSON-RPC
+ * 2.0 over stdio.
  */
 export class MCPStdioClient {
 	private child?: ChildProcess;
@@ -92,19 +111,25 @@ export class MCPStdioClient {
 	private serverExitedError?: string;
 
 	constructor(options: MCPStdioClientOptions = {}) {
+		const serverBundlePath = options.serverBundlePath ?? DEFAULT_SERVER_BUNDLE;
 		this.options = {
-			serverBundlePath: options.serverBundlePath ?? DEFAULT_SERVER_BUNDLE,
+			serverBundlePath,
+			command: options.command ?? process.execPath,
+			args: options.args ?? [serverBundlePath],
 			cwd: options.cwd ?? process.cwd(),
 			env: options.env ?? {},
 			timeoutMs: options.timeoutMs ?? 30000,
+			serverLabel: options.serverLabel ?? "mcp-server",
 		};
 	}
 
 	/**
 	 * Returns true if the server bundle exists at the configured path.
+	 * Always true for custom `command`/`args` configurations.
 	 */
 	isAvailable(): boolean {
-		return existsSync(this.options.serverBundlePath);
+		if (this.options.args[0] && existsSync(this.options.args[0])) return true;
+		return false;
 	}
 
 	/**
@@ -115,9 +140,9 @@ export class MCPStdioClient {
 		if (this.initialized) {
 			return this.tools;
 		}
-		if (!this.isAvailable()) {
+		if (this.options.args[0] && !this.isAvailable()) {
 			throw new Error(
-				`context-mode MCP server bundle not found at ${this.options.serverBundlePath}. ` +
+				`${this.options.serverLabel} MCP server bundle not found at ${this.options.args[0]}. ` +
 					`Reinstall ai or run 'ai update self' to restore it.`,
 			);
 		}
@@ -188,15 +213,11 @@ export class MCPStdioClient {
 	// ── Internals ──────────────────────────────────────────
 
 	private async spawn(): Promise<void> {
-		const env = {
-			...process.env,
-			...this.options.env,
-			CONTEXT_MODE_BRIDGE_DEPTH: "0",
-		};
-		const child = spawn(process.execPath, [this.options.serverBundlePath], {
+		const label = this.options.serverLabel;
+		const child = spawn(this.options.command, this.options.args, {
 			stdio: ["pipe", "pipe", "pipe"],
 			cwd: this.options.cwd,
-			env,
+			env: { ...process.env, ...this.options.env },
 			windowsHide: true,
 		});
 		this.child = child;
@@ -210,20 +231,20 @@ export class MCPStdioClient {
 			// The MCP server may emit warnings on stderr; we don't
 			// want to log them in the agent UI. They go to process
 			// stderr which the agent already routes separately.
-			process.stderr.write(`[context-mode] ${chunk}`);
+			process.stderr.write(`[${label}] ${chunk}`);
 		});
 
 		child.on("exit", (code, signal) => {
 			this.child = undefined;
 			this.initialized = false;
-			this.serverExitedError = `context-mode MCP server exited (code=${code}, signal=${signal})`;
+			this.serverExitedError = `${label} MCP server exited (code=${code}, signal=${signal})`;
 			for (const { reject } of this.pending.values()) {
 				reject(new Error(this.serverExitedError));
 			}
 			this.pending.clear();
 		});
 		child.on("error", (err) => {
-			this.serverExitedError = `context-mode MCP server error: ${err.message}`;
+			this.serverExitedError = `${label} MCP server error: ${err.message}`;
 		});
 	}
 
@@ -231,6 +252,7 @@ export class MCPStdioClient {
 		this.buffer += chunk;
 		// Newline-delimited JSON-RPC.
 		let idx: number;
+		// biome-ignore lint/suspicious/noAssignInExpressions: while-loop with index pattern; biome's suggested refactor loses clarity for delimiter-framed streams
 		while ((idx = this.buffer.indexOf("\n")) !== -1) {
 			const line = this.buffer.slice(0, idx).trim();
 			this.buffer = this.buffer.slice(idx + 1);
@@ -259,7 +281,7 @@ export class MCPStdioClient {
 			return Promise.reject(new Error(this.serverExitedError ?? "MCP server not running"));
 		}
 		const id = nextId();
-		const message = JSON.stringify({ jsonrpc: "2.0", id, method, params: params ?? {} }) + "\n";
+		const message = `${JSON.stringify({ jsonrpc: "2.0", id, method, params: params ?? {} })}\n`;
 		return new Promise<T>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				this.pending.delete(id);
@@ -294,9 +316,7 @@ export class MCPStdioClient {
 		});
 		// The "initialized" notification is fire-and-forget per the spec.
 		if (this.child?.stdin) {
-			this.child.stdin.write(
-				JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n",
-			);
+			this.child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`);
 		}
 	}
 

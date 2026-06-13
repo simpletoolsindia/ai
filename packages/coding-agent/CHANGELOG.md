@@ -203,7 +203,7 @@ Quality-of-life batch. Every fix in this release was found in real testing on a 
 - `WebsearchToolOptions` extended with `defaultLimit`, `defaultLanguage`, `defaultSafesearch`, `defaultTimeRange`, and `headers`; the `websearch` operation now always sends `Accept: application/json` and merges user headers.
 - 30 new tests across `websearch-config.test.ts` (16) and `searcheng-command.test.ts` (14), covering URL normalization, default value validation, models.json round-tripping, header merging, and the persistence path.
 
-## [Unreleased]
+## [0.85.8] - 2026-06-13
 
 ### New Features
 

@@ -140,7 +140,12 @@ jobs:
         run: npm run check
 
       - name: Test
-        run: npm test
+        # AGENTS.md §6.3: use ./test.sh for non-e2e tests. `npm test`
+        # runs the full vitest which includes e2e tests that need real
+        # provider credentials; those are intentionally excluded here
+        # because the release build must not depend on the runner having
+        # access to live API keys.
+        run: ./test.sh
 
       - name: Verify release artifacts are committed
         run: git diff --exit-code

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
-import type { SubagentOperations, SubagentRunResult } from "../src/core/tools/subagent.ts";
+import type { SubagentRunResult } from "../src/core/subagent/runner.ts";
+import type { SubagentOperations, SubagentToolInput } from "../src/core/tools/subagent.ts";
 import { createSubagentTool } from "../src/core/tools/subagent.ts";
 
 function makeResult(overrides: Partial<SubagentRunResult> = {}): SubagentRunResult {
@@ -243,8 +244,8 @@ describe("subagent tool — parallel mode", () => {
 			undefined,
 		);
 		expect(result.details?.results).toHaveLength(2);
-		const broken = result.details?.results.find((r) => r.agent === "broken");
-		const good = result.details?.results.find((r) => r.agent === "good");
+		const broken = result.details?.results.find((r: { agent: string }) => r.agent === "broken");
+		const good = result.details?.results.find((r: { agent: string }) => r.agent === "good");
 		expect(broken?.errorMessage).toBe("Spawn failed");
 		expect(good?.output).toContain("Good output for good");
 	});
@@ -255,7 +256,7 @@ describe("subagent tool — parallel mode", () => {
 				if (agentName === "throws") {
 					throw new Error("network error");
 				}
-				return makeResult({ agent: agentName, output: "ok" });
+				return makeResult({ agent: agentName });
 			},
 		});
 		const tool = createSubagentTool("/tmp", { operations: ops });

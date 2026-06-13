@@ -1,5 +1,5 @@
-import type { Component } from "../tui.ts";
 import { fuzzyFilter } from "../fuzzy.ts";
+import type { Component } from "../tui.ts";
 
 export interface CommandPaletteItem {
 	id: string;
@@ -120,7 +120,12 @@ export class CommandPalette implements Component {
 
 	render(width: number): string[] {
 		if (!this.visible) return [];
-		if (this.cache && this.cache.width === width && this.cache.query === this.query && this.cache.selected === this.selectedIndex) {
+		if (
+			this.cache &&
+			this.cache.width === width &&
+			this.cache.query === this.query &&
+			this.cache.selected === this.selectedIndex
+		) {
 			return this.cache.lines;
 		}
 

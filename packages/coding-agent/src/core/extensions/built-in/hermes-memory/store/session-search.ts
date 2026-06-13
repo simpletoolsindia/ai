@@ -1,30 +1,30 @@
-import { DatabaseManager } from './db.js';
-import { isFts5QueryError, normalizeFts5Query } from './fts-query.js';
+import type { DatabaseManager } from "./db.ts";
+import { isFts5QueryError, normalizeFts5Query } from "./fts-query.ts";
 
 /**
  * Search result from session history.
  */
 export interface SessionSearchResult {
-  sessionId: string;
-  project: string;
-  role: string;
-  content: string;
-  timestamp: string;
-  snippet: string;
+	sessionId: string;
+	project: string;
+	role: string;
+	content: string;
+	timestamp: string;
+	snippet: string;
 }
 
 /**
  * Search options for session search.
  */
 export interface SessionSearchOptions {
-  /** Maximum number of results (default: 10) */
-  limit?: number;
-  /** Filter by project name */
-  project?: string;
-  /** Filter by role: 'user', 'assistant', 'system' */
-  role?: string;
-  /** Only return messages after this date (ISO string) */
-  since?: string;
+	/** Maximum number of results (default: 10) */
+	limit?: number;
+	/** Filter by project name */
+	project?: string;
+	/** Filter by role: 'user', 'assistant', 'system' */
+	role?: string;
+	/** Only return messages after this date (ISO string) */
+	since?: string;
 }
 
 /**
@@ -36,50 +36,50 @@ export interface SessionSearchOptions {
  * @returns Array of search results with snippets
  */
 export function searchSessions(
-  dbManager: DatabaseManager,
-  query: string,
-  options: SessionSearchOptions = {}
+	dbManager: DatabaseManager,
+	query: string,
+	options: SessionSearchOptions = {},
 ): SessionSearchResult[] {
-  if (query.trim().length === 0) {
-    return [];
-  }
+	if (query.trim().length === 0) {
+		return [];
+	}
 
-  const db = dbManager.getDb();
-  const { limit = 10, project, role, since } = options;
+	const db = dbManager.getDb();
+	const { limit = 10, project, role, since } = options;
 
-  // Build the query dynamically based on filters
-  const conditions: string[] = [];
-  const params: unknown[] = [];
+	// Build the query dynamically based on filters
+	const conditions: string[] = [];
+	const params: unknown[] = [];
 
-  // FTS5 match condition — use subquery for reliable rowid matching
-  const normalizedQuery = normalizeFts5Query(query);
-  if (normalizedQuery.length === 0) {
-    return [];
-  }
-  conditions.push('m.rowid IN (SELECT rowid FROM message_fts WHERE message_fts MATCH ?)');
-  params.push(normalizedQuery);
+	// FTS5 match condition — use subquery for reliable rowid matching
+	const normalizedQuery = normalizeFts5Query(query);
+	if (normalizedQuery.length === 0) {
+		return [];
+	}
+	conditions.push("m.rowid IN (SELECT rowid FROM message_fts WHERE message_fts MATCH ?)");
+	params.push(normalizedQuery);
 
-  // Project filter
-  if (project) {
-    conditions.push('s.project = ?');
-    params.push(project);
-  }
+	// Project filter
+	if (project) {
+		conditions.push("s.project = ?");
+		params.push(project);
+	}
 
-  // Role filter
-  if (role) {
-    conditions.push('m.role = ?');
-    params.push(role);
-  }
+	// Role filter
+	if (role) {
+		conditions.push("m.role = ?");
+		params.push(role);
+	}
 
-  // Date filter
-  if (since) {
-    conditions.push('m.timestamp >= ?');
-    params.push(since);
-  }
+	// Date filter
+	if (since) {
+		conditions.push("m.timestamp >= ?");
+		params.push(since);
+	}
 
-  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+	const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
-  const sql = `
+	const sql = `
     SELECT
       m.session_id,
       s.project,
@@ -93,40 +93,40 @@ export function searchSessions(
     ORDER BY m.timestamp DESC
     LIMIT ?
   `;
-  params.push(limit);
+	params.push(limit);
 
-  try {
-    const rows = db.prepare(sql).all(...params) as Array<{
-      session_id: string;
-      project: string;
-      role: string;
-      content: string;
-      timestamp: string;
-      snippet: string;
-    }>;
+	try {
+		const rows = db.prepare(sql).all(...params) as Array<{
+			session_id: string;
+			project: string;
+			role: string;
+			content: string;
+			timestamp: string;
+			snippet: string;
+		}>;
 
-    // Map snake_case column names to camelCase
-    return rows.map(row => ({
-      sessionId: row.session_id,
-      project: row.project,
-      role: row.role,
-      content: row.content,
-      timestamp: row.timestamp,
-      snippet: row.snippet,
-    }));
-  } catch (err) {
-    if (isFts5QueryError(err)) {
-      return [];
-    }
-    throw err;
-  }
+		// Map snake_case column names to camelCase
+		return rows.map((row) => ({
+			sessionId: row.session_id,
+			project: row.project,
+			role: row.role,
+			content: row.content,
+			timestamp: row.timestamp,
+			snippet: row.snippet,
+		}));
+	} catch (err) {
+		if (isFts5QueryError(err)) {
+			return [];
+		}
+		throw err;
+	}
 }
 
 /**
  * Get the total number of indexed messages.
  */
 export function getIndexedMessageCount(dbManager: DatabaseManager): number {
-  const db = dbManager.getDb();
-  const result = db.prepare('SELECT COUNT(*) as count FROM messages').get() as { count: number };
-  return result.count;
+	const db = dbManager.getDb();
+	const result = db.prepare("SELECT COUNT(*) as count FROM messages").get() as { count: number };
+	return result.count;
 }

@@ -17,12 +17,14 @@ export class ProgressBar implements Component {
 	private width: number;
 	private cache?: { width: number; value: number; label: string | undefined; lines: string[] };
 
-	constructor(options: {
-		width?: number;
-		label?: string;
-		showPercent?: boolean;
-		style?: ProgressBarStyle;
-	} = {}) {
+	constructor(
+		options: {
+			width?: number;
+			label?: string;
+			showPercent?: boolean;
+			style?: ProgressBarStyle;
+		} = {},
+	) {
 		this.width = options.width ?? 30;
 		this.label = options.label;
 		this.showPercent = options.showPercent ?? true;
@@ -52,12 +54,7 @@ export class ProgressBar implements Component {
 
 	render(width: number): string[] {
 		const label = this.label;
-		if (
-			this.cache &&
-			this.cache.width === width &&
-			this.cache.value === this.value &&
-			this.cache.label === label
-		) {
+		if (this.cache && this.cache.width === width && this.cache.value === this.value && this.cache.label === label) {
 			return this.cache.lines;
 		}
 		const chars = this.glyphs(this.style);
@@ -78,7 +75,6 @@ export class ProgressBar implements Component {
 				return { filled: "#", empty: "-" };
 			case "thin":
 				return { filled: "━", empty: "─" };
-			case "block":
 			default:
 				return { filled: "█", empty: "░" };
 		}

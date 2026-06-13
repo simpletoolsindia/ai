@@ -3,20 +3,20 @@
  * represents a project and resolves its name.
  */
 
-import * as path from "node:path";
 import * as os from "node:os";
-import { resolveProjectsRoot } from "./paths.js";
+import * as path from "node:path";
+import { resolveProjectsRoot } from "./paths.ts";
 
 export interface ProjectInfo {
-  /** Project name (directory basename), or null if not in a project. */
-  name: string | null;
-  /** Path to the project-scoped memory directory, or null. */
-  memoryDir: string | null;
+	/** Project name (directory basename), or null if not in a project. */
+	name: string | null;
+	/** Path to the project-scoped memory directory, or null. */
+	memoryDir: string | null;
 }
 
 export interface ProjectSkillInfo extends ProjectInfo {
-  /** Path to the project-scoped skills directory, or null. */
-  skillsDir: string | null;
+	/** Path to the project-scoped skills directory, or null. */
+	skillsDir: string | null;
 }
 
 /**
@@ -27,32 +27,32 @@ export interface ProjectSkillInfo extends ProjectInfo {
  * Project-scoped memory is stored at ~/.pi/agent/<projectsMemoryDir>/<projectName>/.
  */
 export function detectProject(projectsMemoryDir = "projects-memory", cwd?: string): ProjectInfo {
-  const dir = cwd ?? process.cwd();
-  const homeDir = os.homedir();
+	const dir = cwd ?? process.cwd();
+	const homeDir = os.homedir();
 
-  // Normalize paths for comparison
-  const resolved = path.resolve(dir);
-  const resolvedHome = path.resolve(homeDir);
+	// Normalize paths for comparison
+	const resolved = path.resolve(dir);
+	const resolvedHome = path.resolve(homeDir);
 
-  if (resolved === resolvedHome || resolved === "/" || !resolved || resolved === resolvedHome + "/") {
-    return { name: null, memoryDir: null };
-  }
+	if (resolved === resolvedHome || resolved === "/" || !resolved || resolved === `${resolvedHome}/`) {
+		return { name: null, memoryDir: null };
+	}
 
-  const name = path.basename(resolved);
-  if (!name || name === "." || name === "..") {
-    return { name: null, memoryDir: null };
-  }
+	const name = path.basename(resolved);
+	if (!name || name === "." || name === "..") {
+		return { name: null, memoryDir: null };
+	}
 
-  return {
-    name,
-    memoryDir: path.join(resolveProjectsRoot(projectsMemoryDir), name),
-  };
+	return {
+		name,
+		memoryDir: path.join(resolveProjectsRoot(projectsMemoryDir), name),
+	};
 }
 
 export function detectProjectSkills(projectsMemoryDir = "projects-memory", cwd?: string): ProjectSkillInfo {
-  const project = detectProject(projectsMemoryDir, cwd);
-  return {
-    ...project,
-    skillsDir: project.memoryDir ? path.join(project.memoryDir, "skills") : null,
-  };
+	const project = detectProject(projectsMemoryDir, cwd);
+	return {
+		...project,
+		skillsDir: project.memoryDir ? path.join(project.memoryDir, "skills") : null,
+	};
 }

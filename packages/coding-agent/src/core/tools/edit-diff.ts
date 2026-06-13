@@ -189,8 +189,7 @@ export function fuzzyFindText(content: string, oldText: string): FuzzyMatchResul
 		const lastLine = oldLines[oldLines.length - 1].trim();
 		if (firstLine.length > 2 && lastLine.length > 2) {
 			for (let i = 0; i <= fuzzyLines.length - oldLines.length; i++) {
-				if (fuzzyLines[i].trim() === firstLine &&
-					fuzzyLines[i + oldLines.length - 1].trim() === lastLine) {
+				if (fuzzyLines[i].trim() === firstLine && fuzzyLines[i + oldLines.length - 1].trim() === lastLine) {
 					const matchedLines = fuzzyLines.slice(i, i + oldLines.length).join("\n");
 					const matchIndex = fuzzyContent.indexOf(matchedLines);
 					if (matchIndex !== -1) {
@@ -236,18 +235,14 @@ function getNotFoundError(
 ): Error {
 	const hint = `
 
-Tip: Use the \`read\` tool to see the exact file content before editing. The \`oldText\` must match EXACTLY — character for character including indentation, blank lines, and trailing spaces. Smart quotes (\u201c\u201d) and straight quotes (\"\") are different; the edit tool normalizes them automatically when fuzzy matching.${oldText && content ? buildDidYouMeanHint(oldText, content) : ""}
+Tip: Use the \`read\` tool to see the exact file content before editing. The \`oldText\` must match EXACTLY — character for character including indentation, blank lines, and trailing spaces. Smart quotes (\u201c\u201d) and straight quotes ("") are different; the edit tool normalizes them automatically when fuzzy matching.${oldText && content ? buildDidYouMeanHint(oldText, content) : ""}
   → read ${path}`;
 
 	const whichEdit = totalEdits === 1 ? "" : `edits[${editIndex}] `;
 	if (totalEdits === 1) {
-		return new Error(
-			`Could not find the text in ${path}.${hint}`,
-		);
+		return new Error(`Could not find the text in ${path}.${hint}`);
 	}
-	return new Error(
-		`Could not find ${whichEdit}in ${path}.${hint}`,
-	);
+	return new Error(`Could not find ${whichEdit}in ${path}.${hint}`);
 }
 
 /**
@@ -275,7 +270,7 @@ function buildDidYouMeanHint(oldText: string, content: string): string {
 		}
 	}
 	if (bestScore < 5 || !bestLine.trim()) return "";
-	const truncated = bestLine.length > 80 ? bestLine.slice(0, 77) + "..." : bestLine;
+	const truncated = bestLine.length > 80 ? `${bestLine.slice(0, 77)}...` : bestLine;
 	return `\n  → Did you mean a line like: "${truncated}"?`;
 }
 
@@ -342,14 +337,20 @@ export function applyEditsToNormalizedContent(
 	// just do sequential global replacements.
 	if (allReplaceAll) {
 		let newContent = baseContent;
-		let totalReplacements = 0;
+		let _totalReplacements = 0;
 		for (const edit of normalizedEdits) {
 			const occurrences = countOccurrences(newContent, edit.oldText);
 			if (occurrences === 0) {
-				throw getNotFoundError(path, normalizedEdits.indexOf(edit), normalizedEdits.length, edit.oldText, baseContent);
+				throw getNotFoundError(
+					path,
+					normalizedEdits.indexOf(edit),
+					normalizedEdits.length,
+					edit.oldText,
+					baseContent,
+				);
 			}
 			newContent = newContent.split(edit.oldText).join(edit.newText);
-			totalReplacements += occurrences;
+			_totalReplacements += occurrences;
 		}
 		if (baseContent === newContent) {
 			throw getNoChangeError(path, normalizedEdits.length);

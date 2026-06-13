@@ -15,7 +15,14 @@ import type { ToolDefinition, ToolRenderResultOptions } from "../extensions/type
 import { resolveReadPathAsync, resolveToCwd } from "./path-utils.ts";
 import { getTextOutput, renderToolPath, replaceTabs, str } from "./render-utils.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
-import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, READ_MAX_LINE_LENGTH, type TruncationResult, truncateHead } from "./truncate.ts";
+import {
+	DEFAULT_MAX_BYTES,
+	DEFAULT_MAX_LINES,
+	formatSize,
+	READ_MAX_LINE_LENGTH,
+	type TruncationResult,
+	truncateHead,
+} from "./truncate.ts";
 
 const readSchema = Type.Object({
 	path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
@@ -149,7 +156,8 @@ function truncateLongLines(text: string): string {
 	let changed = false;
 	for (let i = 0; i < lines.length; i++) {
 		if (lines[i]!.length > READ_MAX_LINE_LENGTH) {
-			lines[i] = `${lines[i]!.slice(0, READ_MAX_LINE_LENGTH)}\u2026 [+${lines[i]!.length - READ_MAX_LINE_LENGTH} chars]`;
+			lines[i] =
+				`${lines[i]!.slice(0, READ_MAX_LINE_LENGTH)}\u2026 [+${lines[i]!.length - READ_MAX_LINE_LENGTH} chars]`;
 			changed = true;
 		}
 	}

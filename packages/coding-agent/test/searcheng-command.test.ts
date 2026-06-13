@@ -14,10 +14,10 @@
  * smoke test in the dev-build `ai` CLI.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const TEST_DIR = mkdtempSync(join(tmpdir(), "ai-searcheng-test-"));
 
@@ -40,9 +40,7 @@ afterEach(() => {
  * shares the same code path.
  */
 
-function validateWebsearchUrl(input: string):
-	| { ok: true; normalized: string }
-	| { ok: false; error: string } {
+function validateWebsearchUrl(input: string): { ok: true; normalized: string } | { ok: false; error: string } {
 	const trimmed = input.trim();
 	if (!trimmed) return { ok: false, error: "URL is empty" };
 	let parsed: URL;
@@ -83,7 +81,7 @@ function writeSearxngToModelsJson(
 		const previous = (providers.websearch ?? {}) as Record<string, unknown>;
 		providers.websearch = { ...previous, baseUrl };
 		existing.providers = providers;
-		writeFileSync(modelsPath, JSON.stringify(existing, null, 2) + "\n", "utf-8");
+		writeFileSync(modelsPath, `${JSON.stringify(existing, null, 2)}\n`, "utf-8");
 		const maxResults = previous.maxResults;
 		return { ok: true, maxResults: typeof maxResults === "number" ? maxResults : undefined };
 	} catch (err) {
@@ -197,10 +195,7 @@ describe("writeSearxngToModelsJson", () => {
 
 	it("overwrites the previous websearch baseUrl (not appends)", () => {
 		const path = join(TEST_DIR, "models-overwrite.json");
-		writeFileSync(
-			path,
-			JSON.stringify({ providers: { websearch: { baseUrl: "https://old.com" } } }),
-		);
+		writeFileSync(path, JSON.stringify({ providers: { websearch: { baseUrl: "https://old.com" } } }));
 		const r = writeSearxngToModelsJson("https://new.com/search", path);
 		expect(r.ok).toBe(true);
 		const written = JSON.parse(readFileSync(path, "utf-8"));

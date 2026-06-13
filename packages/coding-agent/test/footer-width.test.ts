@@ -69,6 +69,9 @@ function createFooterData(providerCount: number): ReadonlyFooterDataProvider {
 			void callback;
 			return () => {};
 		},
+		getCurrentTool: () => null,
+		getCurrentProcess: () => null,
+		getUpdateAvailableVersion: () => null,
 	};
 
 	return provider;

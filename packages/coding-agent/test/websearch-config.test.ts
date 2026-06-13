@@ -10,21 +10,21 @@
  *  - setWebsearchConfig (used by /searcheng) overrides
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRegistry } from "../src/core/model-registry.ts";
 
-let testIdx = 0;
+let _testIdx = 0;
 const TEST_DIR = mkdtempSync(join(tmpdir(), "ai-websearch-test-"));
 const AUTH_PATH = join(TEST_DIR, "auth.json");
 
 beforeEach(() => {
 	// Each test gets a fresh, empty auth.json. We don't share state
 	// across tests; mkdtempSync already created the parent dir.
-	testIdx++;
+	_testIdx++;
 	if (!existsSync(AUTH_PATH)) {
 		writeFileSync(AUTH_PATH, "{}");
 	}

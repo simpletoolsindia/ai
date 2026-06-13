@@ -108,13 +108,7 @@ export class TodoListComponent extends Container {
 		for (let i = 0; i < maxLen; i++) {
 			const a = previous[i];
 			const b = next[i];
-			if (
-				!a ||
-				!b ||
-				a.status !== b.status ||
-				a.content !== b.content ||
-				a.activeForm !== b.activeForm
-			) {
+			if (!a || !b || a.status !== b.status || a.content !== b.content || a.activeForm !== b.activeForm) {
 				changed.add(i);
 			}
 		}
@@ -229,11 +223,7 @@ export class TodoListComponent extends Container {
 		const flashMarker = flashing ? defaultTheme.fg("accent", "▸ ") : "  ";
 		const number = defaultTheme.fg("dim", `${(index + 1).toString().padStart(2, " ")}.`);
 
-		return new Text(
-			`${flashMarker}${number} ${defaultTheme.fg(colorName, glyph)} ${label}${statusBadge}`,
-			0,
-			0,
-		);
+		return new Text(`${flashMarker}${number} ${defaultTheme.fg(colorName, glyph)} ${label}${statusBadge}`, 0, 0);
 	}
 
 	override invalidate(): void {

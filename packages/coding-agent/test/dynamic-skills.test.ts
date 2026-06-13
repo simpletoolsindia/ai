@@ -7,10 +7,10 @@
  * and load them dynamically based on user queries.
  */
 
-import { describe, expect, it, beforeAll } from "vitest";
-import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
+import { join } from "node:path";
+import { beforeAll, describe, expect, it } from "vitest";
 
 const SKILLS_DIR = join(homedir(), ".ai", "agent", "skills");
 
@@ -18,69 +18,32 @@ const skills = [
 	{
 		name: "dev",
 		file: "dev/SKILL.md",
-		expectedTriggers: [
-			"writing code",
-			"fixing bugs",
-			"refactoring",
-			"implementing features",
-			"code review",
-		],
+		expectedTriggers: ["writing code", "fixing bugs", "refactoring", "implementing features", "code review"],
 	},
 	{
 		name: "qa",
 		file: "qa/SKILL.md",
-		expectedTriggers: [
-			"testing",
-			"QA",
-			"test coverage",
-			"test failures",
-			"automated testing",
-		],
+		expectedTriggers: ["testing", "QA", "test coverage", "test failures", "automated testing"],
 	},
 	{
 		name: "devops",
 		file: "devops/SKILL.md",
-		expectedTriggers: [
-			"deployment",
-			"containers",
-			"pipelines",
-			"cloud",
-			"infrastructure",
-			"CI/CD",
-		],
+		expectedTriggers: ["deployment", "containers", "pipelines", "cloud", "infrastructure", "CI/CD"],
 	},
 	{
 		name: "business-analyst",
 		file: "business-analyst/SKILL.md",
-		expectedTriggers: [
-			"requirements",
-			"user stories",
-			"project scope",
-			"feature definition",
-			"business needs",
-		],
+		expectedTriggers: ["requirements", "user stories", "project scope", "feature definition", "business needs"],
 	},
 	{
 		name: "manager",
 		file: "manager/SKILL.md",
-		expectedTriggers: [
-			"planning",
-			"sprint planning",
-			"task prioritization",
-			"timelines",
-			"project organization",
-		],
+		expectedTriggers: ["planning", "sprint planning", "task prioritization", "timelines", "project organization"],
 	},
 	{
 		name: "tech-architect",
 		file: "tech-architect/SKILL.md",
-		expectedTriggers: [
-			"system design",
-			"architecture",
-			"technology choices",
-			"API design",
-			"scalability",
-		],
+		expectedTriggers: ["system design", "architecture", "technology choices", "API design", "scalability"],
 	},
 ];
 
@@ -121,9 +84,7 @@ describe("Dynamic Role-based Skills", () => {
 				const description = descMatch![1].trim().toLowerCase();
 
 				// At least one trigger word should be present
-				const found = skill.expectedTriggers.filter((trigger) =>
-					description.includes(trigger.toLowerCase()),
-				);
+				const found = skill.expectedTriggers.filter((trigger) => description.includes(trigger.toLowerCase()));
 				expect(
 					found.length,
 					`Expected at least 1 trigger word in description, found: ${found.join(", ")}`,
@@ -159,10 +120,7 @@ describe("Dynamic Role-based Skills", () => {
 		expect(result.skills.length).toBeGreaterThanOrEqual(6);
 		const loadedNames = result.skills.map((s) => s.name);
 		for (const skill of skills) {
-			expect(
-				loadedNames,
-				`Expected skill "${skill.name}" to be loaded`,
-			).toContain(skill.name);
+			expect(loadedNames, `Expected skill "${skill.name}" to be loaded`).toContain(skill.name);
 		}
 	});
 

@@ -1,7 +1,7 @@
 import { join } from "node:path";
-import { Agent, type AgentMessage, type ThinkingLevel } from "@simpletoolsindiaorg/ai-agent";
+import { Agent, type ThinkingLevel } from "@simpletoolsindiaorg/ai-agent";
 import { clearStaleToolResults } from "@simpletoolsindiaorg/ai-agent/harness/tool-result-clearing";
-import { clampThinkingLevel, type Message, type Model, streamSimple } from "@simpletoolsindiaorg/ai-provider";
+import { clampThinkingLevel, type Model, streamSimple } from "@simpletoolsindiaorg/ai-provider";
 import { getAgentDir } from "../config.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { AgentSession } from "./agent-session.ts";
@@ -358,11 +358,20 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			//    so a long session doesn't run out of context window. Runs
 			//    first so the extension context sees the slimmed-down
 			//    messages.
-			const cleared = clearStaleToolResults(messages, settingsManager.getToolResultClearing());
+			// Cast at the boundary: the dist of @simpletoolsindiaorg/ai-agent
+			// has CustomAgentMessages = {} (no declaration merging has
+			// happened at typecheck time) so the cleared array — which
+			// actually contains BashExecutionMessage et al. — does not
+			// match the dist's AgentMessage union. The src types are
+			// correct; only the dist is stale.
+			const cleared = clearStaleToolResults(
+				messages as unknown as Parameters<typeof clearStaleToolResults>[0],
+				settingsManager.getToolResultClearing(),
+			);
 			// 2. Extension context (event bus, hermes-memory, etc.).
 			const runner = extensionRunnerRef.current;
 			if (!runner) return cleared;
-			return runner.emitContext(cleared);
+			return runner.emitContext(cleared as unknown as Parameters<typeof runner.emitContext>[0]);
 		},
 		steeringMode: settingsManager.getSteeringMode(),
 		followUpMode: settingsManager.getFollowUpMode(),

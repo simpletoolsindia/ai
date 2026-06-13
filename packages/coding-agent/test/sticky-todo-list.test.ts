@@ -14,7 +14,7 @@
  * interactively.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { buildSystemPrompt } from "../src/core/system-prompt.ts";
 import { getTodoStore } from "../src/core/todo/store.ts";
 

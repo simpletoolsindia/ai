@@ -32,7 +32,9 @@ export class SpanWriter {
 	private queue: SpanRecord[] = [];
 	private flushing = false;
 	private currentPath: string | undefined;
+	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: assigned in pathForNow; kept for symmetry with the path/date/session trio
 	private currentDate: string | undefined;
+	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: assigned in pathForNow; kept for symmetry with the path/date/session trio
 	private currentSession: string | undefined;
 	private timer: NodeJS.Timeout | undefined;
 	private closed = false;
@@ -97,7 +99,7 @@ export class SpanWriter {
 		try {
 			const path = this.resolvePath();
 			await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-			const lines = batch.map((s) => JSON.stringify(s)).join("\n") + "\n";
+			const lines = `${batch.map((s) => JSON.stringify(s)).join("\n")}\n`;
 			await appendFile(path, lines, { encoding: "utf-8", mode: 0o600 });
 		} catch (err) {
 			// Non-fatal: log to stderr but do not throw (we would crash

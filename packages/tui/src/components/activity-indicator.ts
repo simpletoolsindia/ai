@@ -1,5 +1,4 @@
-import type { Component } from "../tui.ts";
-import type { TUI } from "../tui.ts";
+import type { Component, TUI } from "../tui.ts";
 
 const DEFAULT_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const DEFAULT_INTERVAL_MS = 80;
@@ -26,13 +25,15 @@ export class ActivityIndicator implements Component {
 	private theme: ActivityIndicatorTheme;
 	private cache?: { width: number; frame: string; message: string; lines: string[] };
 
-	constructor(options: {
-		ui?: TUI;
-		message?: string;
-		frames?: string[];
-		intervalMs?: number;
-		theme?: ActivityIndicatorTheme;
-	} = {}) {
+	constructor(
+		options: {
+			ui?: TUI;
+			message?: string;
+			frames?: string[];
+			intervalMs?: number;
+			theme?: ActivityIndicatorTheme;
+		} = {},
+	) {
 		this.ui = options.ui ?? null;
 		this.frames = options.frames ?? [...DEFAULT_FRAMES];
 		this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
@@ -74,10 +75,17 @@ export class ActivityIndicator implements Component {
 
 	render(width: number): string[] {
 		const frame = this.frames[this.currentFrame] ?? "";
-		if (this.cache && this.cache.width === width && this.cache.frame === frame && this.cache.message === this.message) {
+		if (
+			this.cache &&
+			this.cache.width === width &&
+			this.cache.frame === frame &&
+			this.cache.message === this.message
+		) {
 			return this.cache.lines;
 		}
-		const line = frame ? `${frame} ${this.message}`.padEnd(width, " ").slice(0, width) : this.message.padEnd(width, " ").slice(0, width);
+		const line = frame
+			? `${frame} ${this.message}`.padEnd(width, " ").slice(0, width)
+			: this.message.padEnd(width, " ").slice(0, width);
 		const fg = this.theme.fg;
 		const out = fg ? fg(line) : line;
 		this.cache = { width, frame, message: this.message, lines: [out] };

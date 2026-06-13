@@ -12,8 +12,8 @@
  * immediately without rebuilding the agent.
  */
 
-import type { Message } from "@simpletoolsindiaorg/ai-provider";
 import type { AgentMessage } from "@simpletoolsindiaorg/ai-agent";
+import type { Message } from "@simpletoolsindiaorg/ai-provider";
 
 const DISABLED_TEXT = "Image reading is disabled.";
 

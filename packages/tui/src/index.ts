@@ -14,8 +14,8 @@ export { Box } from "./components/box.ts";
 export { Breadcrumb, type BreadcrumbItem, type BreadcrumbTheme } from "./components/breadcrumb.ts";
 export { CancellableLoader } from "./components/cancellable-loader.ts";
 export {
-	type CommandPaletteItem,
 	CommandPalette,
+	type CommandPaletteItem,
 	type CommandPaletteTheme,
 } from "./components/command-palette.ts";
 export { Editor, type EditorOptions, type EditorTheme } from "./components/editor.ts";
@@ -23,7 +23,7 @@ export { Image, type ImageOptions, type ImageTheme } from "./components/image.ts
 export { Input } from "./components/input.ts";
 export { Loader, type LoaderIndicatorOptions } from "./components/loader.ts";
 export { type DefaultTextStyle, Markdown, type MarkdownOptions, type MarkdownTheme } from "./components/markdown.ts";
-export { type ProgressBarStyle, ProgressBar } from "./components/progress-bar.ts";
+export { ProgressBar, type ProgressBarStyle } from "./components/progress-bar.ts";
 export {
 	type SelectItem,
 	SelectList,

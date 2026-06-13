@@ -1799,7 +1799,11 @@ describe("ModelRegistry", () => {
 
 			const models = await registry.discoverOllamaModels("ollama");
 			expect(models).toHaveLength(3);
-			expect(models.map((m) => m.id).sort()).toEqual(["gemma4:latest", "granite4.1:8b", "llama3.1:8b-instruct-q4_0"]);
+			expect(models.map((m) => m.id).sort()).toEqual([
+				"gemma4:latest",
+				"granite4.1:8b",
+				"llama3.1:8b-instruct-q4_0",
+			]);
 			for (const m of models) {
 				expect(m.provider).toBe("ollama");
 				expect(m.baseUrl).toBe("http://localhost:11434/v1");
@@ -1817,8 +1821,8 @@ describe("ModelRegistry", () => {
 				callCount++;
 				return new Response(JSON.stringify({ models: [{ name: "gemma4:latest" }] }), {
 					status: 200,
-					headers: { "Content-Type": "application/json" } },
-				);
+					headers: { "Content-Type": "application/json" },
+				});
 			}) as unknown as typeof fetch;
 
 			await registry.discoverOllamaModels("ollama");
@@ -1849,8 +1853,8 @@ describe("ModelRegistry", () => {
 			globalThis.fetch = vi.fn(async () => {
 				return new Response(JSON.stringify({ models: [{ name: "gemma4:latest" }] }), {
 					status: 200,
-					headers: { "Content-Type": "application/json" } },
-				);
+					headers: { "Content-Type": "application/json" },
+				});
 			}) as unknown as typeof fetch;
 			await registry.discoverOllamaModels("ollama");
 
@@ -1872,8 +1876,8 @@ describe("ModelRegistry", () => {
 				requestedUrl = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
 				return new Response(JSON.stringify({ models: [] }), {
 					status: 200,
-					headers: { "Content-Type": "application/json" } },
-				);
+					headers: { "Content-Type": "application/json" },
+				});
 			}) as unknown as typeof fetch;
 
 			await registry.discoverOllamaModels("ollama");
@@ -1902,8 +1906,8 @@ describe("ModelRegistry", () => {
 			globalThis.fetch = vi.fn(async () => {
 				return new Response(JSON.stringify({ models: [{ name: "gemma4:latest" }] }), {
 					status: 200,
-					headers: { "Content-Type": "application/json" } },
-				);
+					headers: { "Content-Type": "application/json" },
+				});
 			}) as unknown as typeof fetch;
 
 			const added = await registry.refreshDiscoveredModels();
@@ -1918,8 +1922,8 @@ describe("ModelRegistry", () => {
 			globalThis.fetch = vi.fn(async () => {
 				return new Response(JSON.stringify({ models: [{ name: "gemma4:latest" }] }), {
 					status: 200,
-					headers: { "Content-Type": "application/json" } },
-				);
+					headers: { "Content-Type": "application/json" },
+				});
 			}) as unknown as typeof fetch;
 
 			const first = await registry.refreshDiscoveredModels();

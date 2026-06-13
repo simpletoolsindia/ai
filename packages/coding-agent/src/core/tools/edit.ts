@@ -454,12 +454,9 @@ Matching rules:
 					}
 				}
 
-				const { baseContent, newContent } = applyEditsToNormalizedContent(
-					normalizedContent,
-					edits,
-					path,
-					{ allReplaceAll },
-				);
+				const { baseContent, newContent } = applyEditsToNormalizedContent(normalizedContent, edits, path, {
+					allReplaceAll,
+				});
 				throwIfAborted();
 
 				const finalContent = bom + restoreLineEndings(newContent, originalEnding);

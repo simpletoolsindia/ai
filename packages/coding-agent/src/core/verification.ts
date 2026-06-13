@@ -17,13 +17,13 @@
 import {
 	type AssistantMessage,
 	type Context,
+	completeSimple,
 	type Message,
 	type Model,
 	type TextContent,
 	type ThinkingContent,
 	type ToolCall,
 	type ToolResultMessage,
-	completeSimple,
 } from "@simpletoolsindiaorg/ai-provider";
 
 /** Result of a verification check. */
@@ -278,7 +278,7 @@ export function extractAssistantResponse(messages: Message[]): string {
 				} else if (block.type === "toolCall") {
 					const tool = block as ToolCall;
 					const args = typeof tool.arguments === "string" ? tool.arguments : JSON.stringify(tool.arguments);
-					parts.unshift(`[Tool: ${tool.name}(${args.length > 200 ? args.slice(0, 200) + "…" : args})]`);
+					parts.unshift(`[Tool: ${tool.name}(${args.length > 200 ? `${args.slice(0, 200)}…` : args})]`);
 				}
 			}
 		}
@@ -308,7 +308,7 @@ export function extractToolResults(messages: Message[]): string {
 		const tr = msg as ToolResultMessage;
 		const textContent = tr.content.filter((c) => c.type === "text");
 		const text = textContent.map((c) => (c as TextContent).text).join("\n");
-		const truncated = text.length > 200 ? text.slice(0, 200) + "…" : text;
+		const truncated = text.length > 200 ? `${text.slice(0, 200)}…` : text;
 		parts.push(`[${tr.toolName}]: ${truncated}`);
 	}
 	return parts.join("\n");

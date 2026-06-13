@@ -101,7 +101,7 @@ export default function (pi: ExtensionAPI) {
 	// Per-session state.
 	let sessionId: string | undefined;
 	let traceId: string | undefined;
-	let sessionStartMs: number | undefined;
+	let _sessionStartMs: number | undefined;
 	// Open spans keyed by an id we attach to the event.
 	const openSpans = new Map<string, SpanRecord>();
 	let currentTurn: SpanRecord | undefined;
@@ -154,7 +154,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_start", async (event) => {
 		sessionId = (event as { sessionId?: string }).sessionId;
 		traceId = makeTraceId(sessionId);
-		sessionStartMs = nowMs();
+		_sessionStartMs = nowMs();
 		writer = newWriter();
 		const sessionSpan = openSpan("session", "session", {
 			"ai.session.id": sessionId ?? "(none)",

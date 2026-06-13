@@ -13,7 +13,7 @@
  *   Next session → skills loader picks it up → injected into system prompt
  */
 
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAgentDir } from "../config.ts";
 
@@ -300,9 +300,7 @@ export class PersonaStore {
 			`- Semicolons: **${p.conventions.semicolons}**`,
 			`- Imports: **${p.conventions.importStyle}**`,
 			`- Naming: **${p.conventions.naming}**`,
-			p.conventions.maxFunctionLength
-				? `- Max function length: **~${p.conventions.maxFunctionLength} lines**`
-				: "",
+			p.conventions.maxFunctionLength ? `- Max function length: **~${p.conventions.maxFunctionLength} lines**` : "",
 			"",
 			"## Project Patterns",
 			"",
@@ -319,9 +317,7 @@ export class PersonaStore {
 				? "- Plan-first workflow: prefer to outline a plan before making changes"
 				: "- Execute-first workflow: jump into implementation, skip planning",
 			`- Comments: **${p.preferences.commentStyle}**`,
-			p.preferences.testAfterChanges
-				? "- Run tests after every change"
-				: "- Only run tests when explicitly asked",
+			p.preferences.testAfterChanges ? "- Run tests after every change" : "- Only run tests when explicitly asked",
 			`- Error handling: **${p.preferences.errorStyle}**`,
 			"",
 			"## Tech Stack",
